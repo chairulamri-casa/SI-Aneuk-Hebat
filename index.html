@@ -481,6 +481,22 @@ function makeDemoAdapter(){
     async getMadrasahInfo(){
       return { nama:'MIN 8 Kota Banda Aceh (contoh)', alamat:'', kabupaten_kota:'Banda Aceh', logo_url:null };
     },
+    async getKanwilOverview(){
+      const perKabkota = [
+        { kabupaten_kota:'Banda Aceh', totalMadrasah:38, madrasahAktifLapor:35, persenPartisipasi:88 },
+        { kabupaten_kota:'Aceh Besar', totalMadrasah:51, madrasahAktifLapor:44, persenPartisipasi:76 },
+        { kabupaten_kota:'Aceh Singkil', totalMadrasah:19, madrasahAktifLapor:9, persenPartisipasi:41 },
+      ];
+      const rankingMadrasah = [
+        { id:'m1', nama:'MIN 8 Kota Banda Aceh', kabupaten_kota:'Banda Aceh', jenjang:'MI', persenPartisipasi:94, kebiasaanTerlemah:'Berolahraga' },
+        { id:'m2', nama:'MTsN 1 Banda Aceh', kabupaten_kota:'Banda Aceh', jenjang:'MTs', persenPartisipasi:87, kebiasaanTerlemah:'Tidur Cepat' },
+        { id:'m3', nama:'SD Negeri Lambada Klieng', kabupaten_kota:'Aceh Besar', jenjang:'SD', persenPartisipasi:41, kebiasaanTerlemah:'Bermasyarakat' },
+      ];
+      return {
+        totalMadrasah: 108, madrasahAktifLapor: 88,
+        perKabkota, rankingMadrasah
+      };
+    },
     async listPegawai(query){
       const all = [
         { id:'p1', nama:'Nurul Huda, S.Pd.I', jabatan:'Guru', role:'wali_kelas', kelas:'VIII-A' },
@@ -581,12 +597,20 @@ function makeAmanahAdapter(supabaseClient){
       const madrasahId = await getMadrasahId();
       const { idToKode } = await getKebiasaanMap();
 
-      // Ambil daftar siswa yang relevan (satu kelas, atau semua kalau kelasId null)
-      let sq = supabaseClient.from('v_siswa_login').select('id').eq('madrasah_id', madrasahId);
-      if (kelasId) sq = sq.eq('kelas_id', kelasId);
-      const { data: siswaRows } = await sq;
-      const siswaIds = (siswaRows || []).map(s => s.id);
-      const jumlahSiswa = siswaIds.length;
+      let jumlahSiswa = 0;
+      let siswaIds = null; // null = tidak difilter per-siswa, langsung pakai madrasah_id
+
+      if (kelasId){
+        const { data: siswaRows } = await supabaseClient.from('v_siswa_login')
+          .select('id').eq('madrasah_id', madrasahId).eq('kelas_id', kelasId);
+        siswaIds = (siswaRows || []).map(s => s.id);
+        jumlahSiswa = siswaIds.length;
+      } else {
+        // Hitung jumlah siswa TANPA menarik semua 904 barisnya -- cukup count.
+        const { count } = await supabaseClient.from('v_siswa_login')
+          .select('id', { count: 'exact', head: true }).eq('madrasah_id', madrasahId);
+        jumlahSiswa = count || 0;
+      }
 
       if (jumlahSiswa === 0){
         return { jumlahSiswa: 0, kelengkapanHariIni: 0, kebiasaanPersen: {}, tertinggi: null, terlemah: null };
@@ -596,14 +620,20 @@ function makeAmanahAdapter(supabaseClient){
       // catatan hari ini -- terpisah dari kualitas kebiasaan, sesuai temuan
       // SI-7KAIH (jangan sampai "sepi lapor" ketuker jadi "kebiasaan buruk").
       const today = todayKey();
-      const { data: todayRows } = await supabaseClient.from('jurnal_kebiasaan')
-        .select('siswa_id, kebiasaan_id').in('siswa_id', siswaIds).eq('tanggal', today);
+      const todayQuery = siswaIds
+        ? supabaseClient.from('jurnal_kebiasaan').select('siswa_id, kebiasaan_id').in('siswa_id', siswaIds).eq('tanggal', today)
+        : supabaseClient.from('jurnal_kebiasaan').select('siswa_id, kebiasaan_id').eq('madrasah_id', madrasahId).eq('tanggal', today);
+      const { data: todayRows, error: todayErr } = await todayQuery;
+      if (todayErr) console.error('getAnalisisKelas (hari ini):', todayErr);
       const uniqueTodayPairs = new Set((todayRows || []).map(r => `${r.siswa_id}_${r.kebiasaan_id}`));
       const kelengkapanHariIni = Math.round((uniqueTodayPairs.size / (jumlahSiswa * HABITS.length)) * 100);
 
       // Persentase per kebiasaan (30 hari terakhir) -- untuk radar chart
-      const { data: monthRows } = await supabaseClient.from('jurnal_kebiasaan')
-        .select('kebiasaan_id, status').in('siswa_id', siswaIds).gte('tanggal', daysAgoKey(30));
+      const monthQuery = siswaIds
+        ? supabaseClient.from('jurnal_kebiasaan').select('kebiasaan_id, status').in('siswa_id', siswaIds).gte('tanggal', daysAgoKey(30))
+        : supabaseClient.from('jurnal_kebiasaan').select('kebiasaan_id, status').eq('madrasah_id', madrasahId).gte('tanggal', daysAgoKey(30));
+      const { data: monthRows, error: monthErr } = await monthQuery;
+      if (monthErr) console.error('getAnalisisKelas (30 hari):', monthErr);
       const tally = {};
       HABITS.forEach(h => { tally[h.code] = { sudah:0, total:0 }; });
       (monthRows || []).forEach(row => {
@@ -631,20 +661,31 @@ function makeAmanahAdapter(supabaseClient){
       const madrasahId = await getMadrasahId();
       const { idToKode } = await getKebiasaanMap();
 
-      let sq = supabaseClient.from('v_siswa_login').select('id').eq('madrasah_id', madrasahId);
-      if (kelasId) sq = sq.eq('kelas_id', kelasId);
-      const { data: siswaRows } = await sq;
-      const siswaIds = (siswaRows || []).map(s => s.id);
-
-      if (siswaIds.length === 0) return { indeks: 0, perHabit: HABITS.map(h => ({ kode:h.code, nama:h.name, icon:h.icon, sudah:0, total:0, persen:0 })) };
-
       // Rentang tanggal awal-akhir bulan (bulan: 1-12)
       const awal = `${tahun}-${String(bulan).padStart(2,'0')}-01`;
       const akhirDate = new Date(tahun, bulan, 0); // hari terakhir bulan itu
       const akhir = akhirDate.toISOString().slice(0,10);
 
-      const { data: rows } = await supabaseClient.from('jurnal_kebiasaan')
-        .select('kebiasaan_id, status').in('siswa_id', siswaIds).gte('tanggal', awal).lte('tanggal', akhir);
+      let rows;
+      if (kelasId){
+        // Per kelas: perlu daftar siswa dulu (jumlahnya kecil, aman pakai .in())
+        const { data: siswaRows } = await supabaseClient.from('v_siswa_login')
+          .select('id').eq('madrasah_id', madrasahId).eq('kelas_id', kelasId);
+        const siswaIds = (siswaRows || []).map(s => s.id);
+        if (siswaIds.length === 0) return { indeks: 0, perHabit: HABITS.map(h => ({ kode:h.code, nama:h.name, icon:h.icon, sudah:0, total:0, persen:0 })) };
+        const { data, error } = await supabaseClient.from('jurnal_kebiasaan')
+          .select('kebiasaan_id, status').in('siswa_id', siswaIds).gte('tanggal', awal).lte('tanggal', akhir);
+        if (error) console.error('getRekapBulanan (per kelas):', error);
+        rows = data;
+      } else {
+        // Semua kelas: filter LANGSUNG lewat madrasah_id di jurnal_kebiasaan,
+        // TIDAK lewat daftar ID siswa (bisa ratusan/ribuan -- URL query jadi
+        // kepanjangan dan gagal diam-diam kalau pakai .in() dengan list besar).
+        const { data, error } = await supabaseClient.from('jurnal_kebiasaan')
+          .select('kebiasaan_id, status').eq('madrasah_id', madrasahId).gte('tanggal', awal).lte('tanggal', akhir);
+        if (error) console.error('getRekapBulanan (semua kelas):', error);
+        rows = data;
+      }
 
       const tally = {};
       HABITS.forEach(h => { tally[h.code] = { sudah:0, total:0 }; });
@@ -668,15 +709,22 @@ function makeAmanahAdapter(supabaseClient){
       const madrasahId = await getMadrasahId();
       const { idToKode } = await getKebiasaanMap();
 
-      let sq = supabaseClient.from('v_siswa_login').select('id').eq('madrasah_id', madrasahId);
-      if (kelasId) sq = sq.eq('kelas_id', kelasId);
-      const { data: siswaRows } = await sq;
-      const siswaIds = (siswaRows || []).map(s => s.id);
-
-      if (siswaIds.length === 0) return { perHabit: HABITS.map(h => ({ kode:h.code, nama:h.name, icon:h.icon, sudah:0, total:0, persen:0 })) };
-
-      const { data: rows } = await supabaseClient.from('jurnal_kebiasaan')
-        .select('kebiasaan_id, status').in('siswa_id', siswaIds).eq('tanggal', tanggal);
+      let rows;
+      if (kelasId){
+        const { data: siswaRows } = await supabaseClient.from('v_siswa_login')
+          .select('id').eq('madrasah_id', madrasahId).eq('kelas_id', kelasId);
+        const siswaIds = (siswaRows || []).map(s => s.id);
+        if (siswaIds.length === 0) return { perHabit: HABITS.map(h => ({ kode:h.code, nama:h.name, icon:h.icon, sudah:0, total:0, persen:0 })) };
+        const { data, error } = await supabaseClient.from('jurnal_kebiasaan')
+          .select('kebiasaan_id, status').in('siswa_id', siswaIds).eq('tanggal', tanggal);
+        if (error) console.error('getRekapHarian (per kelas):', error);
+        rows = data;
+      } else {
+        const { data, error } = await supabaseClient.from('jurnal_kebiasaan')
+          .select('kebiasaan_id, status').eq('madrasah_id', madrasahId).eq('tanggal', tanggal);
+        if (error) console.error('getRekapHarian (semua kelas):', error);
+        rows = data;
+      }
 
       const tally = {};
       HABITS.forEach(h => { tally[h.code] = { sudah:0, total:0 }; });
@@ -697,6 +745,77 @@ function makeAmanahAdapter(supabaseClient){
       const madrasahId = await getMadrasahId();
       const { data } = await supabaseClient.from('madrasah').select('nama, alamat, kabupaten_kota, logo_url').eq('id', madrasahId).maybeSingle();
       return data || { nama:'', alamat:'', kabupaten_kota:'', logo_url:null };
+    },
+    async getKanwilOverview(){
+      // LINTAS-TENANT sengaja -- Kanwil melihat SEMUA madrasah di project,
+      // TIDAK lewat getMadrasahId() (yang cuma untuk satu lembaga aktif).
+      const { data: madrasahRows } = await supabaseClient.from('madrasah')
+        .select('id, nama, jenjang, kabupaten_kota');
+      const semuaMadrasah = madrasahRows || [];
+      const totalMadrasah = semuaMadrasah.length;
+
+      const { idToKode } = await getKebiasaanMap();
+      const { data: jurnalRows, error } = await supabaseClient.from('jurnal_kebiasaan')
+        .select('madrasah_id, kebiasaan_id, status');
+      if (error) console.error('getKanwilOverview:', error);
+
+      // Agregasi per madrasah
+      const perMadrasah = {}; // madrasah_id -> { sudah, total, perHabit: {kode:{sudah,total}} }
+      (jurnalRows || []).forEach(row => {
+        if (!perMadrasah[row.madrasah_id]) perMadrasah[row.madrasah_id] = { sudah:0, total:0, perHabit:{} };
+        const m = perMadrasah[row.madrasah_id];
+        m.total++;
+        if (row.status === 'sudah_terbiasa') m.sudah++;
+        const kode = idToKode[row.kebiasaan_id];
+        if (kode){
+          if (!m.perHabit[kode]) m.perHabit[kode] = { sudah:0, total:0 };
+          m.perHabit[kode].total++;
+          if (row.status === 'sudah_terbiasa') m.perHabit[kode].sudah++;
+        }
+      });
+
+      const madrasahAktifLapor = Object.keys(perMadrasah).length;
+
+      const rankingMadrasah = semuaMadrasah.map(m => {
+        const agg = perMadrasah[m.id];
+        const persenPartisipasi = agg && agg.total > 0 ? Math.round((agg.sudah / agg.total) * 100) : 0;
+        let terlemahKode = null, terlemahPersen = 101;
+        if (agg){
+          Object.keys(agg.perHabit).forEach(kode => {
+            const h = agg.perHabit[kode];
+            const p = h.total > 0 ? Math.round((h.sudah / h.total) * 100) : 0;
+            if (p < terlemahPersen){ terlemahPersen = p; terlemahKode = kode; }
+          });
+        }
+        const habitObj = HABITS.find(h => h.code === terlemahKode);
+        return {
+          id: m.id, nama: m.nama, kabupaten_kota: m.kabupaten_kota, jenjang: m.jenjang,
+          persenPartisipasi, kebiasaanTerlemah: habitObj ? habitObj.name : '-'
+        };
+      }).sort((a, b) => b.persenPartisipasi - a.persenPartisipasi);
+
+      // Agregasi per kabupaten/kota
+      const kabkotaMap = {};
+      semuaMadrasah.forEach(m => {
+        const kk = m.kabupaten_kota || 'Tidak diketahui';
+        if (!kabkotaMap[kk]) kabkotaMap[kk] = { totalMadrasah:0, madrasahAktifLapor:0, sudah:0, total:0 };
+        kabkotaMap[kk].totalMadrasah++;
+        const agg = perMadrasah[m.id];
+        if (agg){
+          kabkotaMap[kk].madrasahAktifLapor++;
+          kabkotaMap[kk].sudah += agg.sudah;
+          kabkotaMap[kk].total += agg.total;
+        }
+      });
+      const perKabkota = Object.keys(kabkotaMap).map(kk => {
+        const d = kabkotaMap[kk];
+        return {
+          kabupaten_kota: kk, totalMadrasah: d.totalMadrasah, madrasahAktifLapor: d.madrasahAktifLapor,
+          persenPartisipasi: d.total > 0 ? Math.round((d.sudah / d.total) * 100) : 0
+        };
+      }).sort((a, b) => b.persenPartisipasi - a.persenPartisipasi);
+
+      return { totalMadrasah, madrasahAktifLapor, perKabkota, rankingMadrasah };
     },
     async listStudentsByName(institutionId, query, kelasId){
       const madrasahId = await getMadrasahId();
@@ -893,7 +1012,7 @@ function Toast({ message }){
   return <div className="toast">{message}</div>;
 }
 
-function InstitutionPicker({ adapter, onPick }){
+function InstitutionPicker({ adapter, onPick, onKanwil }){
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -924,6 +1043,14 @@ function InstitutionPicker({ adapter, onPick }){
           </div>
         </div>
       ))}
+
+      {onKanwil && (
+        <p style={{textAlign:'center', fontSize:12, marginTop:22}}>
+          <span onClick={onKanwil} style={{color:'var(--gold-200)', textDecoration:'underline', cursor:'pointer'}}>
+            Masuk sebagai Admin Kanwil (lintas lembaga)
+          </span>
+        </p>
+      )}
     </div>
   );
 }
@@ -1845,6 +1972,111 @@ function LaporanScreen({ adapter, pegawai, onBack }){
   );
 }
 
+function KanwilLoginScreen({ onSubmit, onBack }){
+  const [nama, setNama] = useState('');
+  return (
+    <div className="phone-screen" style={{background:'var(--green-900)', color:'var(--cream)', padding:'40px 26px', justifyContent:'center'}}>
+      <button className="back-btn" onClick={onBack} aria-label="Kembali">←</button>
+      <p style={{fontSize:11, color:'var(--gold-200)', textTransform:'uppercase', letterSpacing:'.05em', margin:'16px 0 4px'}}>Admin Kanwil</p>
+      <h1 className="voice" style={{fontSize:20, margin:'0 0 6px'}}>Bidang Pendidikan Madrasah</h1>
+      <p style={{fontSize:12, color:'#C7D3C8', margin:'0 0 22px'}}>Kanwil Kementerian Agama Provinsi Aceh -- lintas lembaga, 23 kab/kota</p>
+      <input placeholder="Nama Anda (untuk catatan laporan)" value={nama} onChange={e => setNama(e.target.value)} style={{color:'#000'}} />
+      <button className="btn btn-primary" disabled={!nama.trim()} onClick={() => onSubmit(nama.trim())}>Masuk Dashboard Kanwil</button>
+      <p style={{fontSize:10.5, color:'var(--gold-200)', marginTop:16, lineHeight:1.5}}>
+        Belum ada verifikasi identitas sungguhan di tahap ini -- nama cuma dipakai untuk keterangan "dicetak oleh" di laporan.
+      </p>
+    </div>
+  );
+}
+
+function KanwilDashboard({ adapter, namaAdmin, onBack }){
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { adapter.getKanwilOverview().then(d => { setData(d); setLoading(false); }); }, []);
+
+  const tanggalCetak = new Date().toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+
+  return (
+    <div className="dash">
+      <div className="dash-header">
+        <div>
+          <button className="back-btn" onClick={onBack} aria-label="Kembali" style={{marginBottom:8}}>←</button>
+          <h1>Bidang Pendidikan Madrasah</h1>
+          <p className="sub">Kanwil Kementerian Agama Provinsi Aceh · {namaAdmin}</p>
+        </div>
+        {!loading && data && (
+          <button className="btn btn-primary" style={{width:'auto', margin:0, padding:'10px 20px'}} onClick={() => window.print()}>
+            🖨️ Cetak / PDF
+          </button>
+        )}
+      </div>
+      <div className="dash-body" id="laporan-print-area">
+        {loading || !data ? (
+          <p style={{fontSize:13, color:'var(--ink-faint)'}}>Memuat data seluruh lembaga...</p>
+        ) : (
+          <React.Fragment>
+            <div className="laporan-kop">
+              <p style={{margin:0, fontWeight:700, fontSize:16, textTransform:'uppercase'}}>Kantor Wilayah Kementerian Agama Provinsi Aceh</p>
+              <p style={{margin:'2px 0 10px', fontSize:11, color:'var(--ink-soft)'}}>Bidang Pendidikan Madrasah</p>
+              <p style={{margin:0, fontWeight:700, fontSize:14}}>Laporan Partisipasi Gerakan 7 Kebiasaan Anak Indonesia Hebat</p>
+              <p style={{margin:'2px 0 0', fontSize:11.5, color:'var(--ink-soft)'}}>Per tanggal {tanggalCetak} · Dicetak oleh: {namaAdmin}</p>
+            </div>
+
+            <div className="kpi-grid">
+              <div className="kpi-card"><p className="kpi-label">Total Lembaga</p><p className="kpi-value">{data.totalMadrasah}</p></div>
+              <div className="kpi-card"><p className="kpi-label">Aktif Lapor</p><p className="kpi-value">{data.madrasahAktifLapor}<span style={{fontSize:14, color:'var(--ink-faint)'}}>/{data.totalMadrasah}</span></p></div>
+              <div className="kpi-card">
+                <p className="kpi-label">Kab/Kota Terbaik</p>
+                <p className="kpi-value" style={{fontSize:16}}>{data.perKabkota[0] ? data.perKabkota[0].kabupaten_kota : '-'}</p>
+              </div>
+              <div className="kpi-card">
+                <p className="kpi-label">Perlu Perhatian</p>
+                <p className="kpi-value" style={{fontSize:16, color:'var(--rust-500)'}}>{data.perKabkota.filter(k => k.persenPartisipasi < 50).length} wilayah</p>
+              </div>
+            </div>
+
+            <p className="section-title" style={{marginTop:4}}>Ranking partisipasi per kabupaten/kota</p>
+            <table className="dash-table" style={{marginBottom:24}}>
+              <thead><tr><th></th><th>Kabupaten/Kota</th><th>Lembaga Lapor</th><th>Partisipasi</th></tr></thead>
+              <tbody>
+                {data.perKabkota.map((k, i) => (
+                  <tr key={k.kabupaten_kota}>
+                    <td><span className="rank-badge" style={i >= data.perKabkota.length - 3 ? { background:'var(--rust-100)', color:'var(--rust-700)' } : {}}>{i+1}</span></td>
+                    <td>{k.kabupaten_kota}</td>
+                    <td>{k.madrasahAktifLapor}/{k.totalMadrasah}</td>
+                    <td style={{width:180}}>
+                      <div className="bar-track"><div className="bar-fill" style={{width:`${k.persenPartisipasi}%`, background: k.persenPartisipasi >= 70 ? 'var(--green-600)' : k.persenPartisipasi >= 40 ? 'var(--gold-600)' : 'var(--rust-500)'}}></div></div>
+                      <p style={{fontSize:10.5, color:'var(--ink-soft)', margin:'3px 0 0'}}>{k.persenPartisipasi}%</p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <p className="section-title">Ranking per lembaga</p>
+            <table className="dash-table">
+              <thead><tr><th></th><th>Lembaga</th><th>Jenjang</th><th>Kab/Kota</th><th>Partisipasi</th><th>Kebiasaan Terlemah</th></tr></thead>
+              <tbody>
+                {data.rankingMadrasah.map((m, i) => (
+                  <tr key={m.id}>
+                    <td><span className="rank-badge" style={i >= data.rankingMadrasah.length - 3 && data.rankingMadrasah.length > 5 ? { background:'var(--rust-100)', color:'var(--rust-700)' } : {}}>{i+1}</span></td>
+                    <td style={{fontWeight:600}}>{m.nama}</td>
+                    <td>{m.jenjang}</td>
+                    <td>{m.kabupaten_kota}</td>
+                    <td>{m.persenPartisipasi}%</td>
+                    <td>{m.kebiasaanTerlemah}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </React.Fragment>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring, onOpenAnalisis, onOpenRekapBulanan, onOpenLaporan }){
   const isAdmin = pegawai.role === 'kepala_madrasah' || pegawai.role === 'admin';
   const [kelasList, setKelasList] = useState([]);
@@ -1928,6 +2160,7 @@ function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring,
 function GuruScreen({ adapter, pegawai, kelas, onToast, onBack }){
   const [roster, setRoster] = useState([]);
   const [entriesByStudent, setEntriesByStudent] = useState({});
+  const [dirtyKeys, setDirtyKeys] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0,10));
@@ -1937,6 +2170,7 @@ function GuruScreen({ adapter, pegawai, kelas, onToast, onBack }){
   // berguna khususnya untuk MI yang belum tentu punya app Ortu aktif.
   const refresh = (dateStr) => {
     setLoading(true);
+    setDirtyKeys(new Set()); // reset penanda "disentuh" setiap ganti tanggal
     adapter.listClassRoster(kelas ? kelas.id : null).then(async list => {
       setRoster(list);
       const all = {};
@@ -1955,13 +2189,30 @@ function GuruScreen({ adapter, pegawai, kelas, onToast, onBack }){
       const current = (prev[studentId] || {})[habitCode] || 'belum_terbiasa';
       return { ...prev, [studentId]: { ...prev[studentId], [habitCode]: nextStatus(current) } };
     });
+    // Tandai sel ini SUNGGUH disentuh guru -- cuma yang ditandai ini yang
+    // boleh ikut tersimpan. Nilai default tampilan (belum diklik sama
+    // sekali) TIDAK boleh ikut kesimpan sebagai observasi sungguhan.
+    setDirtyKeys(prev => new Set(prev).add(`${studentId}__${habitCode}`));
   };
 
   const handleSaveAll = async () => {
+    if (dirtyKeys.size === 0){
+      onToast('Belum ada sel yang diklik -- tidak ada yang disimpan');
+      return;
+    }
     setSaving(true);
-    await adapter.recordBulkEntries(selectedDate, entriesByStudent, 'guru');
+    // Susun payload HANYA dari sel yang benar-benar disentuh (dirtyKeys),
+    // bukan seluruh entriesByStudent (yang berisi juga nilai default tampilan).
+    const payload = {};
+    dirtyKeys.forEach(key => {
+      const [studentId, habitCode] = key.split('__');
+      if (!payload[studentId]) payload[studentId] = {};
+      payload[studentId][habitCode] = entriesByStudent[studentId][habitCode];
+    });
+    await adapter.recordBulkEntries(selectedDate, payload, 'guru');
     setSaving(false);
-    onToast('Rekap kelas tersimpan');
+    setDirtyKeys(new Set());
+    onToast(`Tersimpan: ${Object.keys(payload).length} siswa yang diubah`);
   };
 
   const lengkapCount = roster.filter(s => {
@@ -1984,12 +2235,12 @@ function GuruScreen({ adapter, pegawai, kelas, onToast, onBack }){
         </div>
       </div>
       <div className="dash-body">
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10}}>
           <p style={{fontSize:13, color:'var(--ink-soft)', margin:0}}>
-            {roster.length} siswa · <strong style={{color:'var(--green-700)'}}>{lengkapCount}/{roster.length} lengkap</strong> · klik titik untuk ubah status (belum -> perlu dampingan -> sudah terbiasa)
+            {roster.length} siswa · <strong style={{color:'var(--green-700)'}}>{lengkapCount}/{roster.length} lengkap</strong> · klik titik untuk ubah status (belum → perlu dampingan → sudah terbiasa). Titik pudar = belum disentuh, tidak akan tersimpan.
           </p>
-          <button className="btn btn-primary" style={{width:'auto', margin:0, padding:'10px 20px'}} onClick={handleSaveAll} disabled={saving}>
-            {saving ? 'Menyimpan...' : 'Simpan semua'}
+          <button className="btn btn-primary" style={{width:'auto', margin:0, padding:'10px 20px'}} onClick={handleSaveAll} disabled={saving || dirtyKeys.size === 0}>
+            {saving ? 'Menyimpan...' : `Simpan ${dirtyKeys.size > 0 ? `(${dirtyKeys.size} sel)` : 'semua'}`}
           </button>
         </div>
 
@@ -2011,13 +2262,16 @@ function GuruScreen({ adapter, pegawai, kelas, onToast, onBack }){
                       {HABITS.map(h => {
                         const status = e[h.code] || 'belum_terbiasa';
                         const level = STATUS_LEVELS.find(l => l.value === status);
+                        const touched = dirtyKeys.has(`${s.id}__${h.code}`);
                         return (
                           <td key={h.code} style={{textAlign:'center'}}>
-                            <button onClick={() => cycleStatus(s.id, h.code)} aria-label={`${h.name}: ${level.label}`}
-                              title={level.label}
+                            <button onClick={() => cycleStatus(s.id, h.code)} aria-label={`${h.name}: ${level.label}${touched ? ' (akan disimpan)' : ''}`}
+                              title={touched ? `${level.label} -- akan disimpan` : `${level.label} -- belum disentuh, TIDAK akan disimpan`}
                               style={{
-                                width:22, height:22, borderRadius:'50%', border:'none', cursor:'pointer',
-                                background:level.color, padding:0
+                                width:22, height:22, borderRadius:'50%', cursor:'pointer',
+                                background:level.color, padding:0,
+                                border: touched ? '2.5px solid var(--ink)' : '2px solid transparent',
+                                opacity: touched ? 1 : 0.45
                               }} />
                           </td>
                         );
@@ -2049,6 +2303,7 @@ function App(){
   const [student, setStudent] = useState(null);
   const [pegawai, setPegawai] = useState(null);
   const [selectedKelas, setSelectedKelas] = useState(null);
+  const [namaKanwil, setNamaKanwil] = useState('');
   const [toast, setToast] = useState('');
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2200); };
@@ -2063,7 +2318,15 @@ function App(){
     <React.Fragment>
       {step === 'pick-institution' ? (
         <div className="phone">
-          <InstitutionPicker adapter={adapter} onPick={(inst) => { setInstitution(inst); setStep('login'); }} />
+          <InstitutionPicker adapter={adapter} onPick={(inst) => { setInstitution(inst); setStep('login'); }} onKanwil={() => setStep('kanwil-login')} />
+        </div>
+      ) : step === 'kanwil-login' ? (
+        <div className="phone">
+          <KanwilLoginScreen onSubmit={(nama) => { setNamaKanwil(nama); setStep('kanwil-dashboard'); }} onBack={() => setStep('pick-institution')} />
+        </div>
+      ) : step === 'kanwil-dashboard' ? (
+        <div style={{width:'100%', maxWidth:980}}>
+          <KanwilDashboard adapter={adapter} namaAdmin={namaKanwil} onBack={() => setStep('pick-institution')} />
         </div>
       ) : step === 'monitoring' ? (
         <div style={{width:'100%', maxWidth:980}}>
