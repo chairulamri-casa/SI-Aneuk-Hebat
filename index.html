@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SI-Aneuk Hebat</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" onerror="this.dataset.failed=1"></script>
+<style>
+  :root{
+    --cream:#FAF6EC; --paper:#F1EAD6; --paper-2:#EBE2C9; --ink:#1C2B22; --ink-soft:#4A5A4E; --ink-faint:#8B9186;
+    --green-900:#132E24; --green-800:#1B4436; --green-700:#215B47; --green-600:#2E7A5F;
+    --gold-800:#5C4113; --gold-600:#B8862F; --gold-400:#D4A64C; --gold-200:#EFDBA6; --gold-100:#F7ECD1;
+    --rust-700:#7A3A20; --rust-500:#B15A31; --rust-100:#F3DCCB;
+    --teal-700:#1F5850; --teal-100:#D9EEE9;
+    --sage-700:#4C5E30; --sage-100:#E6EFD9;
+    --border:#DCD3B6;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:#E7E0CB; font-family:'Plus Jakarta Sans',sans-serif; color:var(--ink);}
+  .voice{font-family:'Fraunces',serif;}
+  #root{min-height:100vh; display:flex; justify-content:center; padding:30px 16px;}
+  .phone{width:390px; max-width:100%; background:var(--cream); border-radius:32px; border:8px solid var(--green-900); overflow:hidden; box-shadow:0 20px 50px rgba(19,46,36,0.25); height:fit-content;}
+  .phone-screen{min-height:700px; display:flex; flex-direction:column;}
+  .app-header{background:var(--green-800); padding:20px 20px 16px; color:var(--cream);}
+  .app-header .eyebrow{font-size:11px; color:var(--gold-200); letter-spacing:.06em; text-transform:uppercase; margin:0 0 4px;}
+  .app-header h1{font-family:'Fraunces',serif; font-size:21px; font-weight:600; margin:0 0 2px;}
+  .app-header .sub{font-size:12px; color:#C7D3C8; margin:0;}
+  .content-pad{padding:18px; flex:1;}
+  .habit-card{display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:16px; margin-bottom:12px; border:1px solid rgba(0,0,0,0.05); cursor:pointer; transition:transform .1s;}
+  .habit-card:active{transform:scale(0.98);}
+  .habit-icon{width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;}
+  .habit-body{flex:1; min-width:0;}
+  .habit-name{font-weight:600; font-size:15px; margin:0 0 3px;}
+  .habit-status{font-size:12px; margin:0;}
+  .kbc-tag{display:inline-block; font-size:10.5px; padding:2px 8px; border-radius:10px; background:rgba(255,255,255,0.55); font-weight:600; margin-top:5px;}
+  .check-circle{width:26px; height:26px; border-radius:50%; border:2px solid rgba(0,0,0,0.15); flex-shrink:0; position:relative;}
+  .check-circle.done{background:var(--green-600); border-color:var(--green-600);}
+  .check-circle.done::after{content:'✓'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:white; font-size:14px;}
+  .section-title{font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); margin:18px 0 10px;}
+  .streak-row{display:flex; gap:10px; margin-bottom:6px;}
+  .streak-chip{flex:1; background:var(--paper); border-radius:14px; padding:12px; text-align:center;}
+  .streak-chip .num{font-family:'Fraunces',serif; font-size:20px; font-weight:600; display:block;}
+  .streak-chip .lbl{font-size:10px; color:var(--ink-soft);}
+  .btn{width:100%; padding:14px; border-radius:14px; border:none; font-family:inherit; font-weight:700; font-size:14px; cursor:pointer; margin-top:8px;}
+  .btn-primary{background:var(--green-700); color:white;}
+  .btn-secondary{background:var(--paper); color:var(--ink);}
+  .login-card{background:var(--cream); border-radius:14px; padding:14px 16px; text-align:left; display:flex; align-items:center; gap:12px; cursor:pointer; margin-bottom:10px;}
+  .login-card:active{transform:scale(0.98);}
+  select,input{width:100%; padding:11px 12px; border-radius:10px; border:1px solid var(--border); font-family:inherit; font-size:14px; margin-bottom:12px; background:white;}
+  .badge{font-size:10px; padding:3px 9px; border-radius:8px; font-weight:700; letter-spacing:.02em;}
+  .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--green-900); color:var(--cream); padding:10px 18px; border-radius:20px; font-size:13px; font-weight:600; z-index:100;}
+  .back-btn{background:rgba(255,255,255,0.12); border:none; color:var(--cream); width:30px; height:30px; border-radius:9px; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; margin-bottom:10px;}
+  .back-btn:active{background:rgba(255,255,255,0.22);}
+  .complete-banner{background:var(--green-700); color:var(--cream); border-radius:14px; padding:16px; text-align:center; margin-bottom:16px;}
+  .complete-banner p{margin:0; font-size:13px;}
+  .complete-banner .big{font-size:15px; font-weight:700; margin-bottom:4px;}
+  .bottom-nav{display:flex; border-top:1px solid var(--border); background:var(--cream); padding:10px 6px 14px;}
+  .nav-item{flex:1; text-align:center; font-size:10px; color:var(--ink-faint); cursor:pointer; background:none; border:none; font-family:inherit;}
+  .nav-item.active{color:var(--green-700); font-weight:700;}
+  .nav-icon{font-size:17px; display:block; margin-bottom:2px;}
+  .dash{background:var(--cream); border-radius:20px; overflow:hidden; box-shadow:0 20px 50px rgba(19,46,36,0.2); border:1px solid var(--border);}
+  .dash-header{background:var(--green-800); color:var(--cream); padding:22px 26px; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;}
+  .dash-header h1{font-family:'Fraunces',serif; font-size:21px; font-weight:600; margin:0 0 4px;}
+  .dash-header .sub{font-size:12.5px; color:#C7D3C8; margin:0;}
+  .dash-body{padding:22px 26px 28px;}
+  .dash-table{width:100%; border-collapse:collapse; font-size:13px;}
+  .dash-table th{text-align:left; font-size:10.5px; color:var(--ink-soft); padding:0 8px 10px; border-bottom:2px solid var(--border); font-weight:700;}
+  .dash-table td{padding:10px 8px; border-bottom:1px solid var(--border);}
+  .dash-table tr:last-child td{border-bottom:none;}
+  .overlay{position:fixed; inset:0; background:rgba(19,46,36,0.55); display:flex; align-items:center; justify-content:center; z-index:200; padding:20px;}
+  .modal-card{background:var(--cream); border-radius:20px; padding:22px 20px; width:100%; max-width:340px; text-align:center;}
+  .modal-close{background:none; border:none; float:right; font-size:16px; cursor:pointer; color:var(--ink-faint);}
+  .modal-icon{width:56px; height:56px; border-radius:16px; background:var(--paper); display:flex; align-items:center; justify-content:center; font-size:26px; margin:0 auto 12px;}
+  .modal-question{font-size:13px; color:var(--ink-soft); margin:0 0 16px;}
+  .opsi-btn{display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:14px; border:1.5px solid var(--border); background:white; cursor:pointer; margin-bottom:8px; text-align:left; width:100%; font-family:inherit;}
+  .opsi-btn:active{transform:scale(0.98);}
+  .opsi-icon{font-size:20px;}
+  .opsi-label{font-weight:700; font-size:13.5px; margin:0;}
+  .opsi-desc{font-size:11px; color:var(--ink-soft); margin:0;}
+  .celebrate-card{background:var(--cream); border-radius:20px; padding:30px 26px; text-align:center; max-width:280px;}
+  .celebrate-icon{font-size:44px; display:block; margin-bottom:10px; animation:bounce .6s ease;}
+  @keyframes bounce{0%{transform:scale(0.3); opacity:0;} 60%{transform:scale(1.15); opacity:1;} 100%{transform:scale(1);}}
+  .confetti-piece{position:absolute; font-size:18px; animation:fall 1.4s ease-in forwards;}
+  @keyframes fall{0%{transform:translateY(-20px) rotate(0deg); opacity:1;} 100%{transform:translateY(240px) rotate(280deg); opacity:0;}}
+  .badge-card{border-radius:16px; padding:14px 10px; text-align:center; border:2px solid transparent;}
+  .badge-card.unlocked{background:var(--gold-100); border-color:var(--gold-400);}
+  .badge-card.locked{background:var(--paper); opacity:0.55;}
+  .badge-icon{font-size:24px; display:block; margin-bottom:6px;}
+  .badge-name{font-size:11px; font-weight:700; margin:0 0 2px; line-height:1.3;}
+  .badge-status{font-size:9.5px; color:var(--ink-soft); margin:0;}
+  .consist-row{margin-bottom:12px;}
+  .consist-label{display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:4px;}
+  .consist-track{background:var(--paper-2); border-radius:8px; height:7px; overflow:hidden;}
+  .consist-fill{height:100%; border-radius:8px; background:var(--green-600);}
+  .pegawai-card{display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:12px; margin-bottom:8px; cursor:pointer; border:1px solid var(--border); background:white;}
+  .pegawai-card.selected{border-color:var(--green-600); background:var(--sage-100);}
+  .pegawai-avatar{width:34px; height:34px; border-radius:50%; background:var(--paper-2); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:var(--ink-soft); flex-shrink:0;}
+  .siswa-avatar{width:34px; height:34px; border-radius:50%; background:var(--teal-100); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:var(--teal-700); flex-shrink:0;}
+  .role-tag{font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:8px; background:var(--gold-100); color:var(--gold-800); margin-left:auto;}
+  .kelas-tag{font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:8px; background:var(--teal-100); color:var(--teal-700); margin-left:auto;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo } = React;
+
+/* =====================================================================
+   LAPISAN ADAPTER
+   UI di bawah HANYA memanggil fungsi-fungsi ini — tidak pernah menyentuh
+   Supabase langsung. Ganti isi objek `adapter` untuk pindah mode:
+     - 'demo'      : in-memory, tanpa Supabase, untuk uji coba/presentasi
+     - 'standalone': Supabase project sendiri (tabel Bagian A di skema)
+     - 'amanah'    : menempel ke tabel Amanah yang sudah ada
+   ===================================================================== */
+
+const APP_MODE = 'amanah'; // MIN 8 Kota Banda Aceh — menempel ke Supabase Amanah
+
+// Kredensial Supabase project Amanah (aman dipakai di sisi client —
+// dilindungi RLS, BUKAN service_role key).
+const SUPABASE_URL = 'https://djnbttyjyzknujrepdfe.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_2NM4R5w9VxxHITH8GZ642w_ADTYV1sW';
+
+const HABITS = [
+  { code:'bangun_pagi', name:'Bangun Pagi', icon:'🌅', bg:'var(--gold-100)', iconBg:'var(--gold-200)', text:'var(--gold-800)', kbc:'Disiplin diri', domain:'rumah', pertanyaan:'Hari ini kamu bangun pagi dengan semangat?', badge:'Sahabat Bangun Pagi' },
+  { code:'beribadah', name:'Beribadah', icon:'🤲', bg:'var(--teal-100)', iconBg:'#BFE0D7', text:'var(--teal-700)', kbc:'Cinta kepada Tuhan', domain:'rumah', pertanyaan:'Hari ini kamu menjaga ibadahmu?', badge:'Pembiasaan Ibadah' },
+  { code:'berolahraga', name:'Berolahraga', icon:'🏃', bg:'var(--rust-100)', iconBg:'#EAC6AE', text:'var(--rust-700)', kbc:'Amanah jasmani', domain:'keduanya', pertanyaan:'Hari ini kamu bergerak dan berolahraga?', badge:'Anak Aktif' },
+  { code:'makan_sehat', name:'Makan Sehat & Bergizi', icon:'🥗', bg:'var(--sage-100)', iconBg:'#CFE0B9', text:'var(--sage-700)', kbc:'Syukur', domain:'rumah', pertanyaan:'Hari ini kamu makan makanan sehat dan bergizi?', badge:'Pahlawan Makanan Sehat' },
+  { code:'gemar_belajar', name:'Gemar Belajar', icon:'📚', bg:'var(--paper)', iconBg:'var(--paper-2)', text:'var(--ink-soft)', kbc:'Cinta ilmu', domain:'madrasah', pertanyaan:'Hari ini kamu meluangkan waktu untuk belajar?', badge:'Pejuang Belajar' },
+  { code:'bermasyarakat', name:'Bermasyarakat', icon:'🤝', bg:'var(--rust-100)', iconBg:'#EAC6AE', text:'var(--rust-700)', kbc:'Cinta sesama', domain:'madrasah', pertanyaan:'Hari ini kamu berbuat baik kepada sesama?', badge:'Sahabat Sesama' },
+  { code:'tidur_cepat', name:'Tidur Cepat', icon:'😴', bg:'var(--teal-100)', iconBg:'#BFE0D7', text:'var(--teal-700)', kbc:'Keseimbangan diri', domain:'rumah', pertanyaan:'Hari ini kamu tidur lebih awal?', badge:'Tidur Teratur' },
+];
+
+// Kebiasaan yang relevan untuk masing-masing peran pencatat
+const habitsForDomain = (roleDomain) => HABITS.filter(h => h.domain === roleDomain || h.domain === 'keduanya');
+
+// Ambang konsistensi untuk lencana per kebiasaan tercapai
+const BADGE_THRESHOLD = 80;
+// Nama lencana gabungan kalau semua kebiasaan rata-rata di atas ambang
+const META_BADGE = { name:'Aneuk Hebat', icon:'🏅' };
+
+// Pilihan reflektif untuk modal siswa — 3 tingkat, dibahasakan personal
+const REFLEKSI_OPSI = [
+  { status:'sudah_terbiasa', label:'Sudah', desc:'Aku sudah melakukannya hari ini!', icon:'☀️', color:'var(--green-600)' },
+  { status:'perlu_pendampingan', label:'Kadang', desc:'Terkadang aku melakukannya.', icon:'🙂', color:'var(--gold-600)' },
+  { status:'belum_terbiasa', label:'Belum', desc:'Aku belum melakukannya hari ini.', icon:'💭', color:'var(--rust-500)' },
+];
+
+// Misi harian — tantangan terukur per kebiasaan, terpisah dari jurnal
+// utama. Dalam skema Supabase ini merujuk ke tabel misi_harian/misi_selesai.
+const MISI_HARIAN = [
+  { id:'m1', kebiasaanCode:'bangun_pagi', judul:'Bangun Pagi', deskripsi:'Bangun sebelum jam 05.30', icon:'🌅' },
+  { id:'m2', kebiasaanCode:'gemar_belajar', judul:'Luangkan waktu untuk belajar', deskripsi:'Belajar minimal 15 menit', icon:'📚' },
+  { id:'m3', kebiasaanCode:'berolahraga', judul:'Bergerak dan berolahraga', deskripsi:'Olahraga ringan minimal 10 menit', icon:'🏃' },
+  { id:'m4', kebiasaanCode:'bermasyarakat', judul:'Lakukan satu kebaikan untuk orang lain', deskripsi:'Bantu teman atau keluarga', icon:'🤝' },
+];
+const TARGET_TANTANGAN_MINGGUAN = 5;
+
+// Sub-item rincian Ibadah — lapisan opsional, TIDAK menggantikan status
+// utama kebiasaan 'beribadah'. Hanya untuk pencatatan mandiri siswa/ortu,
+// tidak muncul di grid massal Guru (biar beban observasi tidak bertambah).
+const SUB_IBADAH = [
+  { code:'shalat_berjamaah', nama:'Shalat 5 Waktu Berjamaah', icon:'🕌' },
+  { code:'shalat_dhuha', nama:'Shalat Dhuha', icon:'🌤️' },
+  { code:'baca_quran', nama:"Membaca Al-Qur'an", icon:'📖' },
+  { code:'sedekah', nama:'Bersedekah', icon:'🤲' },
+];
+
+// Tingkat (level) siswa berdasarkan total catatan — label dibahasakan
+// KBC, bukan sekadar "Level 1/2/3" polos.
+const LEVEL_SISWA = [
+  { min:0, label:'Pemula', icon:'🌱' },
+  { min:20, label:'Rajin', icon:'🌿' },
+  { min:50, label:'Istiqomah', icon:'🌳' },
+  { min:100, label:'Teladan', icon:'🌟' },
+];
+const getLevelSiswa = (totalCatatan) => {
+  let current = LEVEL_SISWA[0];
+  for (const lvl of LEVEL_SISWA) { if (totalCatatan >= lvl.min) current = lvl; }
+  return current;
+};
+
+// Skala 3 tingkat — dipakai konsisten di seluruh sistem (guru pakai penuh
+// lewat grid; siswa/ortu pakai versi sederhana 2 tombol yang otomatis
+// memetakan ke 'sudah_terbiasa' / 'belum_terbiasa', melewati status tengah).
+const STATUS_LEVELS = [
+  { value:'belum_terbiasa', color:'#E0654A', label:'Belum' },
+  { value:'perlu_pendampingan', color:'#D4A64C', label:'Perlu dampingan' },
+  { value:'sudah_terbiasa', color:'#3D8B6E', label:'Sudah terbiasa' },
+];
+const nextStatus = (current) => {
+  const idx = STATUS_LEVELS.findIndex(s => s.value === current);
+  return STATUS_LEVELS[(idx + 1) % STATUS_LEVELS.length].value;
+};
+
+function makeDemoAdapter(){
+  // Coba pakai penyimpanan persisten Claude (window.storage) kalau tersedia.
+  // Kalau file ini dibuka di luar lingkungan Claude (didownload, dibuka
+  // langsung di browser), otomatis jatuh ke penyimpanan sementara di memori.
+  const hasPersistentStorage = typeof window !== 'undefined' && window.storage;
+  let memoryFallback = {};
+
+  const todayKey = () => new Date().toISOString().slice(0,10);
+
+  async function readDay(studentId, date){
+    const key = `entries:${studentId}:${date}`;
+    if (hasPersistentStorage){
+      try {
+        const res = await window.storage.get(key);
+        return res ? JSON.parse(res.value) : {};
+      } catch (e) {
+        return {};
+      }
+    }
+    return memoryFallback[key] || {};
+  }
+
+  async function writeDay(studentId, date, data){
+    const key = `entries:${studentId}:${date}`;
+    if (hasPersistentStorage){
+      try {
+        await window.storage.set(key, JSON.stringify(data));
+        return;
+      } catch (e) { /* fallback di bawah kalau gagal */ }
+    }
+    memoryFallback[key] = data;
+  }
+
+  async function readMisi(studentId, date){
+    const key = `misi:${studentId}:${date}`;
+    if (hasPersistentStorage){
+      try {
+        const res = await window.storage.get(key);
+        return res ? JSON.parse(res.value) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+    return memoryFallback[key] || [];
+  }
+
+  async function writeMisi(studentId, date, arr){
+    const key = `misi:${studentId}:${date}`;
+    if (hasPersistentStorage){
+      try {
+        await window.storage.set(key, JSON.stringify(arr));
+        return;
+      } catch (e) { /* fallback di bawah kalau gagal */ }
+    }
+    memoryFallback[key] = arr;
+  }
+
+  async function readSubIbadah(studentId, date){
+    const key = `subibadah:${studentId}:${date}`;
+    if (hasPersistentStorage){
+      try {
+        const res = await window.storage.get(key);
+        return res ? JSON.parse(res.value) : {};
+      } catch (e) {
+        return {};
+      }
+    }
+    return memoryFallback[key] || {};
+  }
+
+  async function writeSubIbadah(studentId, date, obj){
+    const key = `subibadah:${studentId}:${date}`;
+    if (hasPersistentStorage){
+      try {
+        await window.storage.set(key, JSON.stringify(obj));
+        return;
+      } catch (e) { /* fallback di bawah kalau gagal */ }
+    }
+    memoryFallback[key] = obj;
+  }
+
+  return {
+    mode: 'demo',
+    persistent: !!hasPersistentStorage,
+    async listInstitutions(){
+      return [{ id:'demo-1', name:'MIN 8 Kota Banda Aceh', jenjang:'MI' }];
+    },
+    async listStudentsByName(institutionId, query){
+      const all = [
+        { id:'s1', full_name:'Aisyah Fitri', class_name:'VIII-A', jenjang:'MTs' },
+        { id:'s2', full_name:'M. Rizki Ramadhan', class_name:'VIII-A', jenjang:'MTs' },
+        { id:'s3', full_name:'Fauzan Ridho', class_name:'III-B', jenjang:'MI' },
+      ];
+      return all.filter(s => s.full_name.toLowerCase().includes((query||'').toLowerCase()));
+    },
+    async listParentsByPhone(phone){
+      // Demo: satu nomor contoh terhubung ke dua anak
+      const parents = [
+        { id:'p1', full_name:'Bunda Fauzan & Zahra', phone:'0812xxxxxxx',
+          children:[
+            { id:'s3', full_name:'Fauzan Ridho', class_name:'III-B', jenjang:'MI' },
+            { id:'s4', full_name:'Zahra Amelia', class_name:'V-A', jenjang:'MI' },
+          ]
+        }
+      ];
+      if (!phone) return parents[0];
+      return parents.find(p => p.phone === phone) || parents[0];
+    },
+    async listClassRoster(classId){
+      return [
+        { id:'s1', full_name:'Aisyah Fitri' },
+        { id:'s2', full_name:'M. Rizki Ramadhan' },
+        { id:'s5', full_name:'Taufik Hidayat' },
+        { id:'s6', full_name:'Nur Halimah' },
+      ];
+    },
+    async getTodayEntries(studentId){
+      const stored = await readDay(studentId, todayKey());
+      const result = {};
+      HABITS.forEach(h => { result[h.code] = stored[h.code] || 'belum_terbiasa'; });
+      return result;
+    },
+    async getEntriesForDate(studentId, dateStr){
+      const stored = await readDay(studentId, dateStr);
+      const result = {};
+      HABITS.forEach(h => { result[h.code] = stored[h.code] || 'belum_terbiasa'; });
+      return result;
+    },
+    async recordEntry(studentId, habitCode, recordedRole, status){
+      const date = todayKey();
+      const stored = await readDay(studentId, date);
+      stored[habitCode] = status || 'sudah_terbiasa';
+      await writeDay(studentId, date, stored);
+      return { ok:true };
+    },
+    async recordBulkEntries(dateStr, entriesByStudent, recordedRole){
+      // entriesByStudent: { studentId: { habitCode: status, ... }, ... }
+      for (const studentId of Object.keys(entriesByStudent)){
+        const stored = await readDay(studentId, dateStr);
+        Object.assign(stored, entriesByStudent[studentId]);
+        await writeDay(studentId, dateStr, stored);
+      }
+      return { ok:true };
+    },
+    async getStreak(studentId){
+      // Perkiraan sederhana untuk demo: hitung ke belakang selama ada
+      // minimal satu kebiasaan tercatat pada hari itu, berturut-turut.
+      let streak = 0;
+      let cursor = new Date();
+      for (let i = 0; i < 30; i++){
+        const dateStr = cursor.toISOString().slice(0,10);
+        const stored = await readDay(studentId, dateStr);
+        const anyDone = Object.values(stored).some(v => v === 'sudah_terbiasa');
+        if (!anyDone) break;
+        streak++;
+        cursor.setDate(cursor.getDate() - 1);
+      }
+      return streak;
+    },
+    async getHabitConsistency(studentId){
+      // Konsistensi per kebiasaan: dari hari-hari yang ADA catatannya
+      // (bukan seluruh 30 hari), berapa persen berstatus sudah_terbiasa.
+      const tally = {};
+      HABITS.forEach(h => { tally[h.code] = { sudah:0, total:0 }; });
+      let cursor = new Date();
+      let totalCatatan = 0;
+      let hariAktif = 0;
+      for (let i = 0; i < 30; i++){
+        const dateStr = cursor.toISOString().slice(0,10);
+        const stored = await readDay(studentId, dateStr);
+        const keys = Object.keys(stored);
+        if (keys.length > 0) hariAktif++;
+        keys.forEach(code => {
+          if (!tally[code]) return;
+          tally[code].total++;
+          totalCatatan++;
+          if (stored[code] === 'sudah_terbiasa') tally[code].sudah++;
+        });
+        cursor.setDate(cursor.getDate() - 1);
+      }
+      const consistency = {};
+      HABITS.forEach(h => {
+        const t = tally[h.code];
+        consistency[h.code] = t.total > 0 ? Math.round((t.sudah / t.total) * 100) : 0;
+      });
+      return { consistency, totalCatatan, hariAktif };
+    },
+    async getMisiHariIni(studentId){
+      const date = todayKey();
+      const completed = await readMisi(studentId, date);
+      return MISI_HARIAN.map(m => ({ ...m, selesai: completed.includes(m.id) }));
+    },
+    async toggleMisi(studentId, misiId){
+      const date = todayKey();
+      let completed = await readMisi(studentId, date);
+      if (completed.includes(misiId)) completed = completed.filter(id => id !== misiId);
+      else completed = [...completed, misiId];
+      await writeMisi(studentId, date, completed);
+      return completed;
+    },
+    async getWeeklyActiveDays(studentId){
+      let count = 0;
+      let cursor = new Date();
+      for (let i = 0; i < 7; i++){
+        const dateStr = cursor.toISOString().slice(0,10);
+        const stored = await readDay(studentId, dateStr);
+        if (Object.keys(stored).length > 0) count++;
+        cursor.setDate(cursor.getDate() - 1);
+      }
+      return count;
+    },
+    async listKelasForMadrasah(){
+      return [
+        { id:'k1', tingkat:1, paralel:'A' }, { id:'k2', tingkat:2, paralel:'A' },
+        { id:'k3', tingkat:3, paralel:'A' }, { id:'k4', tingkat:4, paralel:'A' },
+        { id:'k5', tingkat:5, paralel:'A' }, { id:'k6', tingkat:6, paralel:'A' },
+      ];
+    },
+    async listPegawai(query){
+      const all = [
+        { id:'p1', nama:'Nurul Huda, S.Pd.I', jabatan:'Guru', role:'wali_kelas', kelas:'VIII-A' },
+        { id:'p2', nama:'Andi Massalangka Burhan, S.Pd', jabatan:'Penjas', role:'guru' },
+        { id:'p3', nama:'Rosnawati, S.Pd., M.Pd', jabatan:'Matematika', role:'guru' },
+        { id:'p4', nama:'Safruddin, S.Ag', jabatan:'Pendidikan Agama', role:'guru' },
+        { id:'p5', nama:'Khairul Azhar, M.Si', jabatan:'Kepala Madrasah', role:'kepala_madrasah' },
+        { id:'p6', nama:'Suryani, S.S', jabatan:'Bahasa Inggris', role:'admin' },
+      ];
+      return all.filter(p => p.nama.toLowerCase().includes((query||'').toLowerCase()));
+    },
+    async getSubIbadahToday(studentId){
+      const date = todayKey();
+      const stored = await readSubIbadah(studentId, date);
+      return SUB_IBADAH.map(s => ({ ...s, dilakukan: !!stored[s.code] }));
+    },
+    async recordSubIbadahBulk(studentId, subEntries){
+      const date = todayKey();
+      await writeSubIbadah(studentId, date, subEntries);
+      return { ok:true };
+    }
+  };
+}
+
+// Placeholder — diisi nanti saat integrasi Supabase sungguhan.
+function makeStandaloneAdapter(supabaseClient){
+  return {
+    mode:'standalone',
+    async listInstitutions(){
+      const { data } = await supabaseClient.from('institutions').select('*');
+      return data || [];
+    },
+    async listStudentsByName(institutionId, query){
+      const { data } = await supabaseClient.from('students').select('id, full_name, class_id, jenjang')
+        .eq('institution_id', institutionId).ilike('full_name', `%${query}%`);
+      return data || [];
+    },
+    async getTodayEntries(studentId){
+      const today = new Date().toISOString().slice(0,10);
+      const { data } = await supabaseClient.from('habit_entries').select('habit_id, status')
+        .eq('student_id', studentId).eq('entry_date', today);
+      const result = {};
+      HABITS.forEach(h => { result[h.code] = 'belum_terbiasa'; });
+      (data||[]).forEach(row => { /* mapping kebiasaan_id -> kode perlu join, disederhanakan di sini */ });
+      return result;
+    },
+    async recordEntry(studentId, habitCode, recordedRole, status){
+      return supabaseClient.from('jurnal_kebiasaan').insert({ siswa_id: studentId, tanggal: new Date().toISOString().slice(0,10), status: status || 'sudah_terbiasa', peran_pencatat: recordedRole });
+    },
+    async getStreak(studentId){ return 0; },
+    async listKelasForMadrasah(){ return []; },
+    async getHabitConsistency(studentId){ return { consistency:{}, totalCatatan:0, hariAktif:0 }; },
+    async getMisiHariIni(studentId){ return MISI_HARIAN.map(m => ({ ...m, selesai:false })); },
+    async toggleMisi(studentId, misiId){ return []; },
+    async getWeeklyActiveDays(studentId){ return 0; },
+    async getSubIbadahToday(studentId){ return SUB_IBADAH.map(s => ({ ...s, dilakukan:false })); },
+    async recordSubIbadahBulk(studentId, subEntries){ return { ok:true }; },
+    async listParentsByPhone(phone){
+      const { data } = await supabaseClient.from('people').select('id, full_name, phone').eq('phone', phone).eq('role','ortu').maybeSingle();
+      if (!data) return null;
+      const { data: links } = await supabaseClient.from('parent_student_links').select('student_id, students(id, full_name, class_id, jenjang)').eq('parent_person_id', data.id);
+      return { ...data, children: (links||[]).map(l => l.students) };
+    },
+    async listClassRoster(classId){
+      const { data } = await supabaseClient.from('students').select('id, full_name').eq('class_id', classId);
+      return data || [];
+    }
+  };
+}
+
+// Adapter Amanah -- membaca tabel Amanah asli (madrasah/siswa/kelas/pegawai)
+// dan tabel tambahan yang kita buat lewat si-aneuk-hebat-schema-amanah.sql
+// (kebiasaan/jurnal_kebiasaan/sub_kebiasaan/dst). Single-tenant untuk pilot
+// ini -- madrasah_id diambil sekali dari baris madrasah pertama dan di-cache.
+function makeAmanahAdapter(supabaseClient){
+  // Amanah bersifat multi-tenant (satu project Supabase bisa menampung
+  // banyak madrasah/sekolah). Untuk pilot ini, dikunci ke MIN 8 Kota
+  // Banda Aceh -- jangan asal ambil baris pertama, karena project yang
+  // sama juga menyimpan MTsN 1 Banda Aceh dan SD Negeri Lambada Klieng.
+  const MADRASAH_ID_PILOT = '844344e4-dc56-4f69-9d33-da31f5f86798'; // MIN 8 Kota Banda Aceh
+  let cachedMadrasahId = null;
+  let kodeToId = null;   // { bangun_pagi: 'uuid', ... }
+  let idToKode = null;   // { 'uuid': 'bangun_pagi', ... }
+  let subKodeToId = null;
+  let subIdToKode = null;
+
+  async function getMadrasahId(){
+    if (cachedMadrasahId) return cachedMadrasahId;
+    const { data, error } = await supabaseClient.from('madrasah').select('id').eq('id', MADRASAH_ID_PILOT).maybeSingle();
+    if (error || !data) throw new Error('MIN 8 Kota Banda Aceh tidak ditemukan di tabel madrasah -- cek MADRASAH_ID_PILOT.');
+    cachedMadrasahId = data.id;
+    return cachedMadrasahId;
+  }
+
+  async function getKebiasaanMap(){
+    if (kodeToId) return { kodeToId, idToKode };
+    const { data } = await supabaseClient.from('kebiasaan').select('id, kode');
+    kodeToId = {}; idToKode = {};
+    (data || []).forEach(k => { kodeToId[k.kode] = k.id; idToKode[k.id] = k.kode; });
+    return { kodeToId, idToKode };
+  }
+
+  async function getSubKebiasaanMap(){
+    if (subKodeToId) return { subKodeToId, subIdToKode };
+    const { data } = await supabaseClient.from('sub_kebiasaan').select('id, kode');
+    subKodeToId = {}; subIdToKode = {};
+    (data || []).forEach(s => { subKodeToId[s.kode] = s.id; subIdToKode[s.id] = s.kode; });
+    return { subKodeToId, subIdToKode };
+  }
+
+  const todayKey = () => new Date().toISOString().slice(0,10);
+  const daysAgoKey = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0,10); };
+
+  return {
+    mode: 'amanah',
+    persistent: true,
+    async listInstitutions(){
+      const { data } = await supabaseClient.from('madrasah').select('id, nama, jenjang');
+      return data || [];
+    },
+    async listKelasForMadrasah(){
+      const madrasahId = await getMadrasahId();
+      const { data, error } = await supabaseClient.from('v_kelas_publik')
+        .select('id, tingkat, paralel').eq('madrasah_id', madrasahId).order('tingkat').order('paralel');
+      if (error) { console.error(error); return []; }
+      return data || [];
+    },
+    async listStudentsByName(institutionId, query, kelasId){
+      const madrasahId = await getMadrasahId();
+      let q = supabaseClient.from('v_siswa_login')
+        .select('id, nama, jenjang, tingkat, paralel')
+        .eq('madrasah_id', madrasahId)
+        .ilike('nama', `%${query || ''}%`)
+        .limit(30);
+      if (kelasId) q = q.eq('kelas_id', kelasId);
+      const { data, error } = await q;
+      if (error) { console.error(error); return []; }
+      return (data || []).map(s => ({
+        id: s.id,
+        full_name: s.nama,
+        jenjang: s.jenjang,
+        class_name: s.tingkat ? `${s.tingkat}${s.paralel}` : ''
+      }));
+    },
+    async listParentsByPhone(phone){
+      const { data: linkRow, error } = await supabaseClient.from('ortu_siswa_link')
+        .select('id, nama_ortu, telepon')
+        .eq('telepon', phone)
+        .limit(1).maybeSingle();
+      if (error || !linkRow) return null;
+      const { data: allLinks } = await supabaseClient.from('ortu_siswa_link')
+        .select('siswa_id').eq('telepon', phone);
+      const siswaIds = (allLinks || []).map(l => l.siswa_id);
+      if (siswaIds.length === 0) return { id: linkRow.id, full_name: linkRow.nama_ortu, children: [] };
+      const { data: siswaRows } = await supabaseClient.from('v_siswa_login')
+        .select('id, nama, jenjang, tingkat, paralel').in('id', siswaIds);
+      const children = (siswaRows || []).map(s => ({
+        id: s.id, full_name: s.nama, jenjang: s.jenjang,
+        class_name: s.tingkat ? `${s.tingkat}${s.paralel}` : ''
+      }));
+      return { id: linkRow.id, full_name: linkRow.nama_ortu, children };
+    },
+    async listClassRoster(classId){
+      const madrasahId = await getMadrasahId();
+      let q = supabaseClient.from('v_siswa_login').select('id, nama').eq('madrasah_id', madrasahId).limit(40);
+      if (classId) q = q.eq('kelas_id', classId);
+      const { data } = await q;
+      return (data || []).map(s => ({ id: s.id, full_name: s.nama }));
+    },
+    async listPegawai(query){
+      const madrasahId = await getMadrasahId();
+      const { data } = await supabaseClient.from('pegawai')
+        .select('id, nama, nip_nik, jabatan, role')
+        .eq('madrasah_id', madrasahId)
+        .ilike('nama', `%${query || ''}%`)
+        .limit(15);
+      return (data || []).map(p => ({ id:p.id, nama:p.nama, jabatan:p.jabatan, role:p.role }));
+    },
+    async getTodayEntries(studentId){
+      return this.getEntriesForDate(studentId, todayKey());
+    },
+    async getEntriesForDate(studentId, dateStr){
+      const { idToKode } = await getKebiasaanMap();
+      const { data } = await supabaseClient.from('jurnal_kebiasaan')
+        .select('kebiasaan_id, status')
+        .eq('siswa_id', studentId).eq('tanggal', dateStr).eq('peran_pencatat', 'siswa');
+      const result = {};
+      HABITS.forEach(h => { result[h.code] = 'belum_terbiasa'; });
+      (data || []).forEach(row => { const kode = idToKode[row.kebiasaan_id]; if (kode) result[kode] = row.status; });
+      return result;
+    },
+    async recordEntry(studentId, habitCode, recordedRole, status){
+      const madrasahId = await getMadrasahId();
+      const { kodeToId } = await getKebiasaanMap();
+      const kebiasaanId = kodeToId[habitCode];
+      if (!kebiasaanId) throw new Error(`Kebiasaan "${habitCode}" tidak ditemukan di tabel kebiasaan.`);
+      return supabaseClient.from('jurnal_kebiasaan').upsert({
+        madrasah_id: madrasahId, siswa_id: studentId, kebiasaan_id: kebiasaanId,
+        tanggal: todayKey(), status: status || 'sudah_terbiasa', peran_pencatat: recordedRole
+      }, { onConflict: 'siswa_id,kebiasaan_id,tanggal,peran_pencatat' });
+    },
+    async recordBulkEntries(dateStr, entriesByStudent, recordedRole){
+      const madrasahId = await getMadrasahId();
+      const { kodeToId } = await getKebiasaanMap();
+      const rows = [];
+      Object.keys(entriesByStudent).forEach(studentId => {
+        Object.keys(entriesByStudent[studentId]).forEach(habitCode => {
+          const kebiasaanId = kodeToId[habitCode];
+          if (!kebiasaanId) return;
+          rows.push({
+            madrasah_id: madrasahId, siswa_id: studentId, kebiasaan_id: kebiasaanId,
+            tanggal: dateStr, status: entriesByStudent[studentId][habitCode], peran_pencatat: recordedRole
+          });
+        });
+      });
+      if (rows.length === 0) return { ok:true };
+      return supabaseClient.from('jurnal_kebiasaan').upsert(rows, { onConflict: 'siswa_id,kebiasaan_id,tanggal,peran_pencatat' });
+    },
+    async getStreak(studentId){
+      const { data } = await supabaseClient.from('jurnal_kebiasaan')
+        .select('tanggal, status')
+        .eq('siswa_id', studentId).eq('peran_pencatat', 'siswa')
+        .gte('tanggal', daysAgoKey(30)).order('tanggal', { ascending:false });
+      const byDate = {};
+      (data || []).forEach(r => { byDate[r.tanggal] = byDate[r.tanggal] || []; byDate[r.tanggal].push(r.status); });
+      let streak = 0;
+      for (let i = 0; i < 30; i++){
+        const dateStr = daysAgoKey(i);
+        const statuses = byDate[dateStr];
+        if (!statuses || !statuses.some(s => s === 'sudah_terbiasa')) break;
+        streak++;
+      }
+      return streak;
+    },
+    async getHabitConsistency(studentId){
+      const { idToKode } = await getKebiasaanMap();
+      const { data } = await supabaseClient.from('jurnal_kebiasaan')
+        .select('tanggal, kebiasaan_id, status')
+        .eq('siswa_id', studentId).eq('peran_pencatat', 'siswa')
+        .gte('tanggal', daysAgoKey(30));
+      const tally = {};
+      HABITS.forEach(h => { tally[h.code] = { sudah:0, total:0 }; });
+      const activeDates = new Set();
+      (data || []).forEach(row => {
+        const kode = idToKode[row.kebiasaan_id];
+        if (!kode || !tally[kode]) return;
+        tally[kode].total++;
+        if (row.status === 'sudah_terbiasa') tally[kode].sudah++;
+        activeDates.add(row.tanggal);
+      });
+      const consistency = {};
+      let totalCatatan = 0;
+      HABITS.forEach(h => {
+        const t = tally[h.code];
+        totalCatatan += t.total;
+        consistency[h.code] = t.total > 0 ? Math.round((t.sudah / t.total) * 100) : 0;
+      });
+      return { consistency, totalCatatan, hariAktif: activeDates.size };
+    },
+    async getWeeklyActiveDays(studentId){
+      const { data } = await supabaseClient.from('jurnal_kebiasaan')
+        .select('tanggal').eq('siswa_id', studentId).gte('tanggal', daysAgoKey(7));
+      return new Set((data || []).map(r => r.tanggal)).size;
+    },
+    async getMisiHariIni(studentId){
+      const { data: misiRows } = await supabaseClient.from('misi_harian').select('id, judul, deskripsi, tanggal_aktif').eq('tanggal_aktif', todayKey());
+      if (!misiRows || misiRows.length === 0) return MISI_HARIAN.map(m => ({ ...m, selesai:false }));
+      const { data: selesaiRows } = await supabaseClient.from('misi_selesai').select('misi_id').eq('siswa_id', studentId);
+      const selesaiIds = new Set((selesaiRows || []).map(r => r.misi_id));
+      return misiRows.map(m => ({ id:m.id, judul:m.judul, deskripsi:m.deskripsi, icon:'🎯', selesai: selesaiIds.has(m.id) }));
+    },
+    async toggleMisi(studentId, misiId){
+      const { data } = await supabaseClient.from('misi_selesai').select('id').eq('siswa_id', studentId).eq('misi_id', misiId).maybeSingle();
+      if (data) await supabaseClient.from('misi_selesai').delete().eq('id', data.id);
+      else await supabaseClient.from('misi_selesai').insert({ siswa_id: studentId, misi_id: misiId });
+      return true;
+    },
+    async getSubIbadahToday(studentId){
+      const { subIdToKode } = await getSubKebiasaanMap();
+      const { data: subRows } = await supabaseClient.from('sub_kebiasaan').select('id, kode, nama, ikon');
+      const { data: jurnalRows } = await supabaseClient.from('jurnal_sub_kebiasaan')
+        .select('sub_kebiasaan_id, dilakukan').eq('siswa_id', studentId).eq('tanggal', todayKey());
+      const doneMap = {};
+      (jurnalRows || []).forEach(r => { doneMap[r.sub_kebiasaan_id] = r.dilakukan; });
+      return (subRows && subRows.length > 0 ? subRows : SUB_IBADAH).map(s => ({
+        code: s.kode, nama: s.nama, icon: s.ikon,
+        dilakukan: !!doneMap[s.id]
+      }));
+    },
+    async recordSubIbadahBulk(studentId, subEntries){
+      const madrasahId = await getMadrasahId();
+      const { subKodeToId } = await getSubKebiasaanMap();
+      const rows = Object.keys(subEntries).map(code => ({
+        madrasah_id: madrasahId, siswa_id: studentId, sub_kebiasaan_id: subKodeToId[code],
+        tanggal: todayKey(), dilakukan: !!subEntries[code], peran_pencatat: 'siswa'
+      })).filter(r => r.sub_kebiasaan_id);
+      if (rows.length === 0) return { ok:true };
+      return supabaseClient.from('jurnal_sub_kebiasaan').upsert(rows, { onConflict: 'siswa_id,sub_kebiasaan_id,tanggal' });
+    }
+  };
+}
+
+function getAdapter(){
+  if (APP_MODE === 'demo') return makeDemoAdapter();
+  if (typeof supabase === 'undefined'){
+    console.error('Pustaka Supabase gagal dimuat -- kembali ke mode demo.');
+    return makeDemoAdapter();
+  }
+  const client = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+  if (APP_MODE === 'standalone') return makeStandaloneAdapter(client);
+  if (APP_MODE === 'amanah') return makeAmanahAdapter(client);
+  return makeDemoAdapter();
+}
+
+/* ===================================================================== */
+
+function Toast({ message }){
+  if (!message) return null;
+  return <div className="toast">{message}</div>;
+}
+
+function LoginScreen({ onSelectRole, adapter }){
+  return (
+    <div className="phone-screen" style={{background:'var(--green-900)', color:'var(--cream)', padding:'40px 26px', justifyContent:'center'}}>
+      <div style={{width:64, height:64, borderRadius:16, background:'var(--gold-400)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 18px'}}>
+        <span className="voice" style={{fontSize:22, fontWeight:700, color:'var(--gold-800)'}}>SA</span>
+      </div>
+      <h1 className="voice" style={{fontSize:22, textAlign:'center', margin:'0 0 6px'}}>SI-Aneuk Hebat</h1>
+      <p style={{fontSize:12.5, textAlign:'center', color:'#C7D3C8', margin:'0 0 28px'}}>Sistem Monitoring 7 Kebiasaan Anak Indonesia Hebat</p>
+      <div className="login-card" onClick={() => onSelectRole('siswa')}>
+        <div style={{fontSize:18}}>🎓</div>
+        <div><p style={{margin:0, fontWeight:700, fontSize:13.5, color:'var(--ink)'}}>Masuk sebagai Siswa</p></div>
+      </div>
+      <div className="login-card" onClick={() => onSelectRole('ortu')}>
+        <div style={{fontSize:18}}>👪</div>
+        <div><p style={{margin:0, fontWeight:700, fontSize:13.5, color:'var(--ink)'}}>Masuk sebagai Ortu/Wali</p></div>
+      </div>
+      <div className="login-card" onClick={() => onSelectRole('guru')}>
+        <div style={{fontSize:18}}>📖</div>
+        <div><p style={{margin:0, fontWeight:700, fontSize:13.5, color:'var(--ink)'}}>Masuk sebagai Pegawai</p><p style={{margin:0, fontSize:10.5, color:'var(--ink-soft)'}}>Guru, wali kelas, atau kepala madrasah</p></div>
+      </div>
+      <p style={{fontSize:10.5, textAlign:'center', color:'var(--gold-200)', marginTop:20}}>
+        Mode: {APP_MODE} · Penyimpanan: {adapter.persistent ? 'tersimpan ✓' : 'sementara saja (tidak tersimpan di luar sesi ini)'}
+      </p>
+    </div>
+  );
+}
+
+function StudentPicker({ adapter, onPick, onBack }){
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [kelasList, setKelasList] = useState([]);
+  const [selectedKelas, setSelectedKelas] = useState('');
+
+  useEffect(() => { adapter.listKelasForMadrasah().then(setKelasList); }, []);
+
+  useEffect(() => {
+    adapter.listStudentsByName('demo-1', query, selectedKelas || null).then(setResults);
+  }, [query, selectedKelas]);
+
+  return (
+    <div className="phone-screen">
+      <div className="app-header">
+        <button className="back-btn" onClick={onBack} aria-label="Kembali">←</button>
+        <p className="eyebrow">Masuk sebagai siswa</p>
+        <h1>Cari nama Anda</h1>
+      </div>
+      <div className="content-pad">
+        {kelasList.length > 0 && (
+          <select value={selectedKelas} onChange={e => setSelectedKelas(e.target.value)}>
+            <option value="">Semua kelas</option>
+            {kelasList.map(k => (
+              <option key={k.id} value={k.id}>Kelas {k.tingkat}{k.paralel}</option>
+            ))}
+          </select>
+        )}
+        <input placeholder="Ketik nama..." value={query} onChange={e => setQuery(e.target.value)} />
+        {results.map(s => {
+          const initial = s.full_name.charAt(0).toUpperCase();
+          return (
+            <div key={s.id} className="pegawai-card" onClick={() => onPick(s)}>
+              <div className="siswa-avatar">{initial}</div>
+              <div>
+                <p style={{margin:0, fontWeight:700, fontSize:13.5, color:'var(--ink)'}}>{s.full_name}</p>
+                <p style={{margin:0, fontSize:11, color:'var(--ink-soft)'}}>{s.jenjang || 'Siswa'}</p>
+              </div>
+              {s.class_name && <span className="kelas-tag">{s.class_name}</span>}
+            </div>
+          );
+        })}
+        {results.length === 0 && <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Belum ada hasil, coba ketik nama lain.</p>}
+      </div>
+    </div>
+  );
+}
+
+function HabitModal({ habit, adapter, student, onSelect, onClose }){
+  const isIbadah = habit.code === 'beribadah';
+  const [subEntries, setSubEntries] = useState({});
+  const [subLoaded, setSubLoaded] = useState(!isIbadah);
+
+  useEffect(() => {
+    if (!isIbadah) return;
+    adapter.getSubIbadahToday(student.id).then(list => {
+      const obj = {};
+      list.forEach(s => { obj[s.code] = s.dilakukan; });
+      setSubEntries(obj);
+      setSubLoaded(true);
+    });
+  }, []);
+
+  const toggleSub = (code) => setSubEntries(prev => ({ ...prev, [code]: !prev[code] }));
+
+  const handlePick = async (status) => {
+    if (isIbadah) await adapter.recordSubIbadahBulk(student.id, subEntries);
+    onSelect(status);
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal-card" onClick={e => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose} aria-label="Tutup">x</button>
+        <div className="modal-icon">{habit.icon}</div>
+        <p style={{fontFamily:"'Fraunces',serif", fontSize:16, fontWeight:600, margin:'0 0 6px'}}>{habit.name}</p>
+        <p className="modal-question">{habit.pertanyaan}</p>
+
+        {isIbadah && subLoaded && (
+          <div style={{textAlign:'left', background:'var(--paper)', borderRadius:12, padding:'10px 12px', marginBottom:14}}>
+            <p style={{fontSize:11, fontWeight:700, color:'var(--ink-soft)', margin:'0 0 8px', textTransform:'uppercase', letterSpacing:'.03em'}}>Rincian ibadah hari ini (opsional)</p>
+            {SUB_IBADAH.map(s => (
+              <label key={s.code} style={{display:'flex', alignItems:'center', gap:8, padding:'5px 0', fontSize:12.5, cursor:'pointer'}}>
+                <input type="checkbox" checked={!!subEntries[s.code]} onChange={() => toggleSub(s.code)} style={{width:'auto', margin:0}} />
+                <span>{s.icon} {s.nama}</span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {REFLEKSI_OPSI.map(opt => (
+          <button key={opt.status} className="opsi-btn" onClick={() => handlePick(opt.status)}>
+            <span className="opsi-icon">{opt.icon}</span>
+            <span>
+              <p className="opsi-label" style={{color:opt.color}}>{opt.label}</p>
+              <p className="opsi-desc">{opt.desc}</p>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CelebrationOverlay({ message, onDone }){
+  useEffect(() => {
+    const t = setTimeout(onDone, 1300);
+    return () => clearTimeout(t);
+  }, []);
+  const pieces = ['🎉','✨','🎈','🌟','💛'];
+  return (
+    <div className="overlay">
+      <div className="celebrate-card" style={{position:'relative', overflow:'hidden'}}>
+        {[...Array(8)].map((_, i) => (
+          <span key={i} className="confetti-piece" style={{left:`${10 + i*10}%`, animationDelay:`${i*0.08}s`}}>{pieces[i % pieces.length]}</span>
+        ))}
+        <span className="celebrate-icon">🎉</span>
+        <p style={{fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:600, margin:'0 0 6px'}}>Mantap!</p>
+        <p style={{fontSize:12.5, color:'var(--ink-soft)', margin:0}}>{message}</p>
+      </div>
+    </div>
+  );
+}
+
+function PencapaianTab({ adapter, student }){
+  const [data, setData] = useState(null);
+  const [streak, setStreak] = useState(0);
+
+  useEffect(() => {
+    Promise.all([adapter.getHabitConsistency(student.id), adapter.getStreak(student.id)])
+      .then(([d, s]) => { setData(d); setStreak(s); });
+  }, [student.id]);
+
+  if (!data) return <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Memuat...</p>;
+
+  const rataRata = HABITS.length > 0
+    ? Math.round(HABITS.reduce((sum, h) => sum + (data.consistency[h.code] || 0), 0) / HABITS.length)
+    : 0;
+  const metaUnlocked = rataRata >= BADGE_THRESHOLD;
+
+  return (
+    <div>
+      <div className="streak-row">
+        <div className="streak-chip"><span className="num" style={{color:'var(--rust-500)'}}>{streak}🔥</span><span className="lbl">Streak</span></div>
+        <div className="streak-chip"><span className="num" style={{color:'var(--green-700)'}}>{data.hariAktif}</span><span className="lbl">Hari aktif</span></div>
+        <div className="streak-chip"><span className="num" style={{color:'var(--gold-600)'}}>{data.totalCatatan}</span><span className="lbl">Catatan</span></div>
+      </div>
+
+      <p className="section-title">Konsistensi per kebiasaan</p>
+      {HABITS.map(h => {
+        const pct = data.consistency[h.code] || 0;
+        return (
+          <div key={h.code} className="consist-row">
+            <div className="consist-label"><span>{h.icon} {h.name}</span><span>{pct}%</span></div>
+            <div className="consist-track"><div className="consist-fill" style={{width:`${pct}%`, background: pct >= BADGE_THRESHOLD ? 'var(--green-600)' : pct >= 40 ? 'var(--gold-500, var(--gold-600))' : 'var(--rust-500)'}}></div></div>
+          </div>
+        );
+      })}
+
+      <p className="section-title">Lencana saya</p>
+      <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:10}}>
+        {HABITS.map(h => {
+          const pct = data.consistency[h.code] || 0;
+          const unlocked = pct >= BADGE_THRESHOLD;
+          return (
+            <div key={h.code} className={`badge-card ${unlocked ? 'unlocked' : 'locked'}`}>
+              <span className="badge-icon">{unlocked ? '🏆' : '🔒'}</span>
+              <p className="badge-name">{h.badge}</p>
+              <p className="badge-status">{unlocked ? 'Tercapai!' : `${pct}/${BADGE_THRESHOLD}%`}</p>
+            </div>
+          );
+        })}
+        <div className={`badge-card ${metaUnlocked ? 'unlocked' : 'locked'}`}>
+          <span className="badge-icon">{metaUnlocked ? META_BADGE.icon : '🔒'}</span>
+          <p className="badge-name">{META_BADGE.name}</p>
+          <p className="badge-status">{metaUnlocked ? 'Tercapai!' : `${rataRata}/${BADGE_THRESHOLD}%`}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MisiTab({ adapter, student, onToast }){
+  const [misiList, setMisiList] = useState([]);
+  const [weeklyDays, setWeeklyDays] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = () => {
+    Promise.all([adapter.getMisiHariIni(student.id), adapter.getWeeklyActiveDays(student.id)])
+      .then(([m, w]) => { setMisiList(m); setWeeklyDays(w); setLoading(false); });
+  };
+
+  useEffect(() => { refresh(); }, [student.id]);
+
+  const handleToggle = async (misi) => {
+    await adapter.toggleMisi(student.id, misi.id);
+    if (!misi.selesai) onToast(`Misi selesai: ${misi.judul}`);
+    refresh();
+  };
+
+  const weeklyProgress = Math.min(weeklyDays, TARGET_TANTANGAN_MINGGUAN);
+
+  if (loading) return <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Memuat...</p>;
+
+  return (
+    <div>
+      <p className="section-title">Misi hari ini</p>
+      {misiList.map(m => (
+        <div key={m.id} className="mission-card" onClick={() => handleToggle(m)} style={{cursor:'pointer'}}>
+          <div style={{fontSize:20}}>{m.icon}</div>
+          <div className="mtext">
+            <p className="mtitle">{m.judul}</p>
+            <p className="mdesc">{m.deskripsi}</p>
+          </div>
+          <div className={`check-circle ${m.selesai ? 'done' : ''}`}></div>
+        </div>
+      ))}
+
+      <p className="section-title">Tantangan minggu ini</p>
+      <div className="mission-card" style={{background:'var(--gold-100)', flexDirection:'column', alignItems:'stretch'}}>
+        <p className="mtitle" style={{marginBottom:4}}>🏅 Catat kebiasaan baik selama {TARGET_TANTANGAN_MINGGUAN} hari minggu ini</p>
+        <div className="consist-track" style={{margin:'8px 0 4px'}}>
+          <div className="consist-fill" style={{width:`${(weeklyProgress/TARGET_TANTANGAN_MINGGUAN)*100}%`, background:'var(--gold-600)'}}></div>
+        </div>
+        <p className="mdesc">{weeklyProgress} / {TARGET_TANTANGAN_MINGGUAN} hari</p>
+      </div>
+    </div>
+  );
+}
+
+function ProfilTab({ adapter, student, onLogout }){
+  const [data, setData] = useState(null);
+  const [streak, setStreak] = useState(0);
+
+  useEffect(() => {
+    Promise.all([adapter.getHabitConsistency(student.id), adapter.getStreak(student.id)])
+      .then(([d, s]) => { setData(d); setStreak(s); });
+  }, [student.id]);
+
+  if (!data) return <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Memuat...</p>;
+
+  const level = getLevelSiswa(data.totalCatatan);
+  const badgeCount = HABITS.filter(h => (data.consistency[h.code] || 0) >= BADGE_THRESHOLD).length;
+
+  return (
+    <div>
+      <div style={{background:'var(--green-700)', borderRadius:16, padding:'22px 18px', textAlign:'center', color:'var(--cream)', marginBottom:16}}>
+        <div style={{width:56, height:56, borderRadius:'50%', background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, margin:'0 auto 10px'}}>🎓</div>
+        <p style={{fontFamily:"'Fraunces',serif", fontSize:17, fontWeight:600, margin:'0 0 3px'}}>{student.full_name}</p>
+        <p style={{fontSize:12, color:'#C7D3C8', margin:0}}>{student.class_name || student.jenjang} · MIN 8 Kota Banda Aceh</p>
+      </div>
+
+      <div style={{background:'var(--paper)', borderRadius:14, padding:'14px 16px', display:'flex', alignItems:'center', gap:12, marginBottom:14}}>
+        <div style={{fontSize:26}}>{level.icon}</div>
+        <div>
+          <p style={{margin:0, fontWeight:700, fontSize:14}}>Level {LEVEL_SISWA.indexOf(level)+1} · {level.label}</p>
+          <p style={{margin:0, fontSize:11, color:'var(--ink-soft)'}}>{data.hariAktif} hari aktif tercatat</p>
+        </div>
+      </div>
+
+      <div className="streak-row">
+        <div className="streak-chip"><span className="num" style={{color:'var(--gold-600)'}}>{data.totalCatatan}</span><span className="lbl">Catatan</span></div>
+        <div className="streak-chip"><span className="num" style={{color:'var(--rust-500)'}}>{streak}🔥</span><span className="lbl">Streak</span></div>
+        <div className="streak-chip"><span className="num" style={{color:'var(--green-700)'}}>{badgeCount}🏆</span><span className="lbl">Lencana</span></div>
+      </div>
+
+      <button className="btn" style={{background:'transparent', border:'1.5px solid var(--rust-500)', color:'var(--rust-500)', marginTop:18}} onClick={onLogout}>
+        Keluar
+      </button>
+    </div>
+  );
+}
+
+function SiswaJurnal({ adapter, student, onToast, onBack }){
+  const [entries, setEntries] = useState({});
+  const [streak, setStreak] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState('beranda');
+  const [activeModal, setActiveModal] = useState(null);
+  const [celebration, setCelebration] = useState(null);
+
+  const refresh = () => {
+    Promise.all([adapter.getTodayEntries(student.id), adapter.getStreak(student.id)])
+      .then(([e, s]) => { setEntries(e); setStreak(s); setLoading(false); });
+  };
+
+  useEffect(() => { refresh(); }, [student.id]);
+
+  const openHabit = (habit) => setActiveModal(habit);
+
+  const handleSelectStatus = async (status) => {
+    const habit = activeModal;
+    setActiveModal(null);
+    await adapter.recordEntry(student.id, habit.code, 'siswa', status);
+    refresh();
+    if (status === 'sudah_terbiasa'){
+      setCelebration(`Satu kebiasaan baik sudah kamu catat: ${habit.name}!`);
+    } else {
+      onToast('Catatan tersimpan, terima kasih sudah jujur ya');
+    }
+  };
+
+  const doneCount = Object.values(entries).filter(v => v === 'sudah_terbiasa').length;
+  const pct = Math.round((doneCount / HABITS.length) * 100);
+  const allDone = doneCount === HABITS.length;
+
+  const handleNav = (target) => setTab(target);
+
+  return (
+    <div className="phone-screen">
+      <div className="app-header">
+        <button className="back-btn" onClick={onBack} aria-label="Kembali">←</button>
+        <p className="eyebrow">Hari ini</p>
+        <h1>Assalamualaikum, {student.full_name.split(' ')[0]}</h1>
+        <p className="sub">{student.class_name || student.jenjang}</p>
+      </div>
+      <div className="content-pad">
+        {tab === 'beranda' && (
+          <React.Fragment>
+            <div className="streak-row">
+              <div className="streak-chip"><span className="num" style={{color:'var(--rust-500)'}}>{streak}🔥</span><span className="lbl">Hari beruntun</span></div>
+              <div className="streak-chip"><span className="num" style={{color:'var(--gold-600)'}}>{loading ? '...' : pct+'%'}</span><span className="lbl">Hari ini</span></div>
+            </div>
+
+            {allDone && (
+              <div className="complete-banner">
+                <p className="big">Mantap, 7 kebiasaan lengkap hari ini! 🎉</p>
+                <p>Kembali lagi besok untuk lanjutkan hari beruntun kamu.</p>
+              </div>
+            )}
+
+            <p className="section-title">7 kebiasaan hari ini</p>
+            {HABITS.map(h => {
+              const status = entries[h.code] || 'belum_terbiasa';
+              const done = status === 'sudah_terbiasa';
+              const kadang = status === 'perlu_pendampingan';
+              const statusLabel = done ? 'Sudah dicatat' : kadang ? 'Kadang, dicatat' : 'Ketuk untuk catat';
+              return (
+                <div key={h.code} className="habit-card" style={{background:h.bg}} onClick={() => openHabit(h)}>
+                  <div className="habit-icon" style={{background:h.iconBg}}>{h.icon}</div>
+                  <div className="habit-body">
+                    <p className="habit-name">{h.name}</p>
+                    <p className="habit-status" style={{color:h.text}}>{statusLabel}</p>
+                    <span className="kbc-tag" style={{color:h.text}}>{h.kbc}</span>
+                  </div>
+                  <div className={`check-circle ${done ? 'done' : ''}`} style={kadang ? {background:'var(--gold-400)', borderColor:'var(--gold-400)'} : {}}></div>
+                </div>
+              );
+            })}
+          </React.Fragment>
+        )}
+
+        {tab === 'pencapaian' && <PencapaianTab adapter={adapter} student={student} />}
+        {tab === 'misi' && <MisiTab adapter={adapter} student={student} onToast={onToast} />}
+        {tab === 'profil' && <ProfilTab adapter={adapter} student={student} onLogout={onBack} />}
+      </div>
+      <div className="bottom-nav">
+        <button className={`nav-item ${tab==='beranda'?'active':''}`} onClick={() => handleNav('beranda')}><span className="nav-icon">🏠</span>Beranda</button>
+        <button className={`nav-item ${tab==='misi'?'active':''}`} onClick={() => handleNav('misi')}><span className="nav-icon">🎯</span>Misi</button>
+        <button className={`nav-item ${tab==='pencapaian'?'active':''}`} onClick={() => handleNav('pencapaian')}><span className="nav-icon">🏆</span>Pencapaian</button>
+        <button className={`nav-item ${tab==='profil'?'active':''}`} onClick={() => handleNav('profil')}><span className="nav-icon">👤</span>Profil</button>
+      </div>
+
+      {activeModal && <HabitModal habit={activeModal} adapter={adapter} student={student} onSelect={handleSelectStatus} onClose={() => setActiveModal(null)} />}
+      {celebration && <CelebrationOverlay message={celebration} onDone={() => setCelebration(null)} />}
+    </div>
+  );
+}
+
+function OrtuScreen({ adapter, onToast, onBack }){
+  const [phone, setPhone] = useState('');
+  const [phoneSubmitted, setPhoneSubmitted] = useState(adapter.mode === 'demo');
+  const [parent, setParent] = useState(null);
+  const [notFound, setNotFound] = useState(false);
+  const [activeChildId, setActiveChildId] = useState(null);
+  const [entries, setEntries] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!phoneSubmitted) return;
+    setNotFound(false);
+    adapter.listParentsByPhone(adapter.mode === 'demo' ? null : phone).then(p => {
+      if (!p || !p.children || p.children.length === 0){ setNotFound(true); return; }
+      setParent(p);
+      setActiveChildId(p.children[0].id);
+    });
+  }, [phoneSubmitted]);
+
+  const refresh = (childId) => {
+    setLoading(true);
+    adapter.getTodayEntries(childId).then(e => { setEntries(e); setLoading(false); });
+  };
+
+  useEffect(() => { if (activeChildId) refresh(activeChildId); }, [activeChildId]);
+
+  if (!phoneSubmitted){
+    return (
+      <div className="phone-screen">
+        <div className="app-header">
+          <button className="back-btn" onClick={onBack} aria-label="Kembali">←</button>
+          <p className="eyebrow">Login Ortu/Wali</p>
+          <h1>Masukkan nomor HP</h1>
+          <p className="sub">Nomor yang terdaftar di madrasah</p>
+        </div>
+        <div className="content-pad">
+          <input type="tel" placeholder="08xx-xxxx-xxxx" value={phone} onChange={e => setPhone(e.target.value)} />
+          <button className="btn btn-primary" onClick={() => setPhoneSubmitted(true)} disabled={!phone.trim()}>Lanjut</button>
+          {notFound && <p style={{fontSize:12, color:'var(--rust-500)', marginTop:10}}>Nomor belum terdaftar. Hubungi wali kelas untuk didaftarkan.</p>}
+        </div>
+      </div>
+    );
+  }
+
+  if (notFound){
+    return (
+      <div className="phone-screen">
+        <div className="app-header">
+          <button className="back-btn" onClick={() => setPhoneSubmitted(false)} aria-label="Kembali">←</button>
+          <h1>Nomor tidak ditemukan</h1>
+        </div>
+        <div className="content-pad">
+          <p style={{fontSize:13, color:'var(--ink-soft)'}}>Nomor {phone} belum terdaftar sebagai ortu/wali siswa manapun. Hubungi wali kelas untuk pendaftaran.</p>
+          <button className="btn btn-secondary" onClick={() => setPhoneSubmitted(false)}>Coba nomor lain</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!parent) return <div className="phone-screen content-pad"><p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Memuat...</p></div>;
+
+
+  const activeChild = parent.children.find(c => c.id === activeChildId);
+  const rumahHabits = habitsForDomain('rumah');
+
+  const handleToggle = async (habitCode, targetStatus) => {
+    if (entries[habitCode] === targetStatus) return;
+    await adapter.recordEntry(activeChildId, habitCode, 'ortu', targetStatus);
+    onToast(`Kebiasaan ${activeChild.full_name.split(' ')[0]} dicatat`);
+    refresh(activeChildId);
+  };
+
+  return (
+    <div className="phone-screen">
+      <div className="app-header">
+        <button className="back-btn" onClick={onBack} aria-label="Kembali">←</button>
+        <p className="eyebrow">Selasa, 25 Agustus 2026</p>
+        <h1>Catatan hari ini</h1>
+        <p className="sub">Assalamualaikum, {parent.full_name}</p>
+      </div>
+      <div className="content-pad">
+        <div style={{marginBottom:16}}>
+          {parent.children.map(c => (
+            <button key={c.id} onClick={() => setActiveChildId(c.id)}
+              style={{
+                display:'inline-flex', alignItems:'center', gap:8, padding:'8px 14px', borderRadius:20,
+                background: c.id === activeChildId ? 'var(--green-700)' : 'var(--paper)',
+                color: c.id === activeChildId ? 'var(--cream)' : 'var(--ink)',
+                fontSize:13, fontWeight:600, marginRight:8, border:'none', cursor:'pointer', fontFamily:'inherit'
+              }}>
+              {c.full_name.split(' ')[0]} · {c.class_name}
+            </button>
+          ))}
+        </div>
+
+        <p className="section-title">Kebiasaan di rumah</p>
+        {loading ? <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Memuat...</p> : rumahHabits.map(h => {
+          const status = entries[h.code] || 'belum_terbiasa';
+          const done = status === 'sudah_terbiasa';
+          return (
+            <div key={h.code} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 14px', borderRadius:12, background:'var(--paper)', marginBottom:8}}>
+              <div style={{display:'flex', alignItems:'center', gap:10, fontSize:13.5, fontWeight:600}}>
+                <span>{h.icon}</span>{h.name}
+              </div>
+              <div style={{display:'flex', borderRadius:16, overflow:'hidden', border:'1px solid var(--border)'}}>
+                <span onClick={() => handleToggle(h.code, 'sudah_terbiasa')} style={{padding:'5px 12px', fontSize:11.5, fontWeight:600, cursor:'pointer', background: done ? 'var(--green-600)' : 'transparent', color: done ? 'white' : 'var(--ink-faint)'}}>Sudah</span>
+                <span onClick={() => handleToggle(h.code, 'belum_terbiasa')} style={{padding:'5px 12px', fontSize:11.5, fontWeight:600, cursor:'pointer', background: !done ? 'var(--rust-500)' : 'transparent', color: !done ? 'white' : 'var(--ink-faint)'}}>Belum</span>
+              </div>
+            </div>
+          );
+        })}
+
+        <div className="lead-note" style={{background:'var(--gold-100)', border:'1px solid var(--gold-200)', borderRadius:14, padding:'14px 16px', fontSize:12.5, color:'var(--gold-800)', marginTop:16, lineHeight:1.5}}>
+          Kebiasaan "Gemar Belajar" dan "Bermasyarakat" dicatat oleh guru di madrasah — Ibunda/Ayahanda cukup pantau, tidak perlu mengisi ulang di sini.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PegawaiPicker({ adapter, onPick, onBack }){
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [selected, setSelected] = useState(null);
+
+  useEffect(() => { adapter.listPegawai(query).then(setResults); }, [query]);
+
+  const roleLabel = (role) => {
+    if (role === 'kepala_madrasah') return 'Kepala Madrasah';
+    if (role === 'wali_kelas') return 'Wali Kelas';
+    if (role === 'admin') return 'Admin';
+    return null;
+  };
+
+  return (
+    <div className="phone-screen">
+      <div className="app-header">
+        <button className="back-btn" onClick={onBack} aria-label="Kembali">←</button>
+        <p className="eyebrow">Login Pegawai</p>
+        <h1>Pilih nama Anda</h1>
+        <p className="sub">Untuk masuk — tanpa password</p>
+      </div>
+      <div className="content-pad">
+        <input placeholder="Ketik nama..." value={query} onChange={e => setQuery(e.target.value)} />
+        {results.map(p => {
+          const label = roleLabel(p.role);
+          const initial = p.nama.charAt(0).toUpperCase();
+          return (
+            <div key={p.id} className={`pegawai-card ${selected && selected.id === p.id ? 'selected' : ''}`} onClick={() => setSelected(p)}>
+              <div className="pegawai-avatar">{initial}</div>
+              <div>
+                <p style={{margin:0, fontWeight:700, fontSize:13.5, color:'var(--ink)'}}>{p.nama}</p>
+                <p style={{margin:0, fontSize:11, color:'var(--ink-soft)'}}>{p.jabatan}{p.kelas ? ` · ${p.kelas}` : ''}</p>
+              </div>
+              {label && <span className="role-tag">{label}</span>}
+            </div>
+          );
+        })}
+        {results.length === 0 && <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Belum ada hasil, coba ketik nama lain.</p>}
+
+        {selected && (
+          <React.Fragment>
+            <div className="lead-note" style={{marginTop:14}}>
+              Anda akan masuk sebagai: <strong>{selected.nama}</strong> ({selected.jabatan}{roleLabel(selected.role) ? ` · ${roleLabel(selected.role)}` : ''})
+            </div>
+            <button className="btn btn-primary" onClick={() => onPick(selected)}>Masuk ke dashboard</button>
+          </React.Fragment>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring }){
+  const isAdmin = pegawai.role === 'kepala_madrasah' || pegawai.role === 'admin';
+  const [kelasList, setKelasList] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    adapter.listKelasForMadrasah().then(list => { setKelasList(list); setLoading(false); });
+  }, []);
+
+  return (
+    <div className="phone-screen">
+      <div className="app-header">
+        <button className="back-btn" onClick={onBack} aria-label="Kembali">←</button>
+        <p className="eyebrow">Selasa, 25 Agustus 2026</p>
+        <h1>Selamat datang, {pegawai.nama.split(',')[0]}</h1>
+        <p className="sub">Gerakan 7 Kebiasaan Anak Indonesia Hebat · TP 2026/2027</p>
+      </div>
+      <div className="content-pad">
+        <p className="section-title">Monitoring per kelas</p>
+        {loading && <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Memuat daftar kelas...</p>}
+        {!loading && kelasList.length === 0 && (
+          <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Belum ada data kelas ditemukan untuk madrasah ini.</p>
+        )}
+        {kelasList.map(k => (
+          <div key={k.id} className="habit-card" style={{background:'var(--paper)'}} onClick={() => onOpenMonitoring(k)}>
+            <div className="habit-icon" style={{background:'var(--green-700)', color:'white', fontWeight:700}}>{k.tingkat}{k.paralel}</div>
+            <div className="habit-body">
+              <p className="habit-name">Kelas {k.tingkat}{k.paralel}</p>
+              <p className="habit-status" style={{color:'var(--ink-soft)'}}>Ketuk untuk buka monitoring</p>
+            </div>
+          </div>
+        ))}
+        {isAdmin && kelasList.length > 0 && (
+          <div className="lead-note" style={{marginTop:14}}>
+            Anda masuk sebagai {pegawai.jabatan} — bisa lihat monitoring semua kelas. Guru biasa idealnya hanya melihat kelas yang diampu (pembatasan ini masih perlu ditambahkan berbasis wali_kelas_id).
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GuruScreen({ adapter, pegawai, kelas, onToast, onBack }){
+  const [roster, setRoster] = useState([]);
+  const [entriesByStudent, setEntriesByStudent] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0,10));
+
+  // Guru mengisi SEMUA kebiasaan hari itu (bukan cuma ranah madrasah) --
+  // meniru pola SI-7KAIH: input massal per kelas untuk seluruh 7 kebiasaan,
+  // berguna khususnya untuk MI yang belum tentu punya app Ortu aktif.
+  const refresh = (dateStr) => {
+    setLoading(true);
+    adapter.listClassRoster(kelas ? kelas.id : null).then(async list => {
+      setRoster(list);
+      const all = {};
+      for (const s of list){
+        all[s.id] = await adapter.getEntriesForDate(s.id, dateStr);
+      }
+      setEntriesByStudent(all);
+      setLoading(false);
+    });
+  };
+
+  useEffect(() => { refresh(selectedDate); }, [selectedDate]);
+
+  const cycleStatus = (studentId, habitCode) => {
+    setEntriesByStudent(prev => {
+      const current = (prev[studentId] || {})[habitCode] || 'belum_terbiasa';
+      return { ...prev, [studentId]: { ...prev[studentId], [habitCode]: nextStatus(current) } };
+    });
+  };
+
+  const handleSaveAll = async () => {
+    setSaving(true);
+    await adapter.recordBulkEntries(selectedDate, entriesByStudent, 'guru');
+    setSaving(false);
+    onToast('Rekap kelas tersimpan');
+  };
+
+  const lengkapCount = roster.filter(s => {
+    const e = entriesByStudent[s.id] || {};
+    return HABITS.every(h => e[h.code] === 'sudah_terbiasa');
+  }).length;
+
+  return (
+    <div className="dash">
+      <div className="dash-header">
+        <div>
+          <button className="back-btn" onClick={onBack} aria-label="Kembali" style={{marginBottom:8}}>←</button>
+          <h1>Monitoring 7 Kebiasaan</h1>
+          <p className="sub">{kelas ? `Kelas ${kelas.tingkat}${kelas.paralel} · ` : ''}{pegawai ? `${pegawai.nama}` : ''} — input massal per kelas</p>
+        </div>
+        <div style={{textAlign:'right'}}>
+          <p style={{margin:0, fontSize:12, color:'var(--gold-200)'}}>Tanggal</p>
+          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+            style={{marginBottom:0, width:'auto', background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.25)', color:'var(--cream)', colorScheme:'dark'}} />
+        </div>
+      </div>
+      <div className="dash-body">
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+          <p style={{fontSize:13, color:'var(--ink-soft)', margin:0}}>
+            {roster.length} siswa · <strong style={{color:'var(--green-700)'}}>{lengkapCount}/{roster.length} lengkap</strong> · klik titik untuk ubah status (belum -> perlu dampingan -> sudah terbiasa)
+          </p>
+          <button className="btn btn-primary" style={{width:'auto', margin:0, padding:'10px 20px'}} onClick={handleSaveAll} disabled={saving}>
+            {saving ? 'Menyimpan...' : 'Simpan semua'}
+          </button>
+        </div>
+
+        {loading ? <p style={{fontSize:13, color:'var(--ink-faint)'}}>Memuat...</p> : (
+          <div style={{overflowX:'auto'}}>
+            <table className="dash-table">
+              <thead>
+                <tr>
+                  <th style={{minWidth:150}}>Nama siswa</th>
+                  {HABITS.map(h => <th key={h.code} style={{textAlign:'center', minWidth:64}}>{h.icon}<br/>{h.name.split(' ')[0]}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {roster.map(s => {
+                  const e = entriesByStudent[s.id] || {};
+                  return (
+                    <tr key={s.id}>
+                      <td style={{fontWeight:600}}>{s.full_name}</td>
+                      {HABITS.map(h => {
+                        const status = e[h.code] || 'belum_terbiasa';
+                        const level = STATUS_LEVELS.find(l => l.value === status);
+                        return (
+                          <td key={h.code} style={{textAlign:'center'}}>
+                            <button onClick={() => cycleStatus(s.id, h.code)} aria-label={`${h.name}: ${level.label}`}
+                              title={level.label}
+                              style={{
+                                width:22, height:22, borderRadius:'50%', border:'none', cursor:'pointer',
+                                background:level.color, padding:0
+                              }} />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{display:'flex', gap:16, marginTop:18, fontSize:12, color:'var(--ink-soft)'}}>
+          {STATUS_LEVELS.map(l => (
+            <div key={l.value} style={{display:'flex', alignItems:'center', gap:6}}>
+              <span style={{width:12, height:12, borderRadius:'50%', background:l.color, display:'inline-block'}}></span>{l.label}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  const adapter = useMemo(() => getAdapter(), []);
+  const [step, setStep] = useState('login');
+  const [student, setStudent] = useState(null);
+  const [pegawai, setPegawai] = useState(null);
+  const [selectedKelas, setSelectedKelas] = useState(null);
+  const [toast, setToast] = useState('');
+
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2200); };
+
+  const handleSelectRole = (role) => {
+    if (role === 'siswa') setStep('pick-student');
+    else if (role === 'ortu') setStep('ortu');
+    else if (role === 'guru') setStep('pick-pegawai');
+  };
+
+  return (
+    <React.Fragment>
+      {step === 'monitoring' ? (
+        <div style={{width:'100%', maxWidth:980}}>
+          <GuruScreen adapter={adapter} pegawai={pegawai} kelas={selectedKelas} onToast={showToast} onBack={() => setStep('pegawai-dashboard')} />
+        </div>
+      ) : (
+        <div className="phone">
+          {step === 'login' && <LoginScreen onSelectRole={handleSelectRole} adapter={adapter} />}
+          {step === 'pick-student' && <StudentPicker adapter={adapter} onPick={(s) => { setStudent(s); setStep('jurnal'); }} onBack={() => setStep('login')} />}
+          {step === 'jurnal' && student && <SiswaJurnal adapter={adapter} student={student} onToast={showToast} onBack={() => { setStudent(null); setStep('login'); }} />}
+          {step === 'ortu' && <OrtuScreen adapter={adapter} onToast={showToast} onBack={() => setStep('login')} />}
+          {step === 'pick-pegawai' && <PegawaiPicker adapter={adapter} onPick={(p) => { setPegawai(p); setStep('pegawai-dashboard'); }} onBack={() => setStep('login')} />}
+          {step === 'pegawai-dashboard' && pegawai && <PegawaiDashboard adapter={adapter} pegawai={pegawai} onToast={showToast} onBack={() => { setPegawai(null); setStep('login'); }} onOpenMonitoring={(k) => { setSelectedKelas(k); setStep('monitoring'); }} />}
+        </div>
+      )}
+      <Toast message={toast} />
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
