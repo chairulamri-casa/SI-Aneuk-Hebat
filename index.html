@@ -198,6 +198,18 @@ const nextStatus = (current) => {
   return STATUS_LEVELS[(idx + 1) % STATUS_LEVELS.length].value;
 };
 
+// Format nama kelas dari tingkat + paralel. Kelas Amanah yang belum
+// dibagi paralelnya diisi teks panjang "Belum Dibagi", bukan huruf
+// tunggal seperti "A" -- jadi digabung dempet ("1Belum Dibagi") kalau
+// asal concat. Kalau paralel-nya pendek (huruf/angka biasa), gabung
+// tanpa spasi seperti biasa ("1A"); kalau panjang, pisah rapi ("Kelas 1 (Belum Dibagi)").
+const formatKelas = (tingkat, paralel) => {
+  if (!tingkat) return '';
+  if (!paralel) return `${tingkat}`;
+  if (paralel.length <= 2) return `${tingkat}${paralel}`;
+  return `${tingkat} (${paralel})`;
+};
+
 function makeDemoAdapter(){
   // Coba pakai penyimpanan persisten Claude (window.storage) kalau tersedia.
   // Kalau file ini dibuka di luar lingkungan Claude (didownload, dibuka
@@ -418,6 +430,20 @@ function makeDemoAdapter(){
         { id:'k5', tingkat:5, paralel:'A' }, { id:'k6', tingkat:6, paralel:'A' },
       ];
     },
+    async getAnalisisKelas(kelasId){
+      // Demo: angka contoh statis, cukup untuk lihat bentuk radar chart-nya
+      const kebiasaanPersen = {
+        bangun_pagi: 80, beribadah: 90, berolahraga: 70, makan_sehat: 60,
+        gemar_belajar: 40, bermasyarakat: 55, tidur_cepat: 95
+      };
+      return {
+        jumlahSiswa: 24,
+        kelengkapanHariIni: 38,
+        kebiasaanPersen,
+        tertinggi: { kode:'tidur_cepat', persen:95 },
+        terlemah: { kode:'gemar_belajar', persen:40 }
+      };
+    },
     async listPegawai(query){
       const all = [
         { id:'p1', nama:'Nurul Huda, S.Pd.I', jabatan:'Guru', role:'wali_kelas', kelas:'VIII-A' },
@@ -514,6 +540,56 @@ function makeAmanahAdapter(supabaseClient){
       if (error) { console.error(error); return []; }
       return data || [];
     },
+    async getAnalisisKelas(kelasId){
+      const madrasahId = await getMadrasahId();
+      const { idToKode } = await getKebiasaanMap();
+
+      // Ambil daftar siswa yang relevan (satu kelas, atau semua kalau kelasId null)
+      let sq = supabaseClient.from('v_siswa_login').select('id').eq('madrasah_id', madrasahId);
+      if (kelasId) sq = sq.eq('kelas_id', kelasId);
+      const { data: siswaRows } = await sq;
+      const siswaIds = (siswaRows || []).map(s => s.id);
+      const jumlahSiswa = siswaIds.length;
+
+      if (jumlahSiswa === 0){
+        return { jumlahSiswa: 0, kelengkapanHariIni: 0, kebiasaanPersen: {}, tertinggi: null, terlemah: null };
+      }
+
+      // Kelengkapan hari ini: berapa % dari (siswa x 7 kebiasaan) yang punya
+      // catatan hari ini -- terpisah dari kualitas kebiasaan, sesuai temuan
+      // SI-7KAIH (jangan sampai "sepi lapor" ketuker jadi "kebiasaan buruk").
+      const today = todayKey();
+      const { data: todayRows } = await supabaseClient.from('jurnal_kebiasaan')
+        .select('siswa_id, kebiasaan_id').in('siswa_id', siswaIds).eq('tanggal', today);
+      const uniqueTodayPairs = new Set((todayRows || []).map(r => `${r.siswa_id}_${r.kebiasaan_id}`));
+      const kelengkapanHariIni = Math.round((uniqueTodayPairs.size / (jumlahSiswa * HABITS.length)) * 100);
+
+      // Persentase per kebiasaan (30 hari terakhir) -- untuk radar chart
+      const { data: monthRows } = await supabaseClient.from('jurnal_kebiasaan')
+        .select('kebiasaan_id, status').in('siswa_id', siswaIds).gte('tanggal', daysAgoKey(30));
+      const tally = {};
+      HABITS.forEach(h => { tally[h.code] = { sudah:0, total:0 }; });
+      (monthRows || []).forEach(row => {
+        const kode = idToKode[row.kebiasaan_id];
+        if (!kode || !tally[kode]) return;
+        tally[kode].total++;
+        if (row.status === 'sudah_terbiasa') tally[kode].sudah++;
+      });
+      const kebiasaanPersen = {};
+      HABITS.forEach(h => {
+        const t = tally[h.code];
+        kebiasaanPersen[h.code] = t.total > 0 ? Math.round((t.sudah / t.total) * 100) : 0;
+      });
+
+      let tertinggi = null, terlemah = null;
+      HABITS.forEach(h => {
+        const p = kebiasaanPersen[h.code];
+        if (!tertinggi || p > tertinggi.persen) tertinggi = { kode: h.code, persen: p };
+        if (!terlemah || p < terlemah.persen) terlemah = { kode: h.code, persen: p };
+      });
+
+      return { jumlahSiswa, kelengkapanHariIni, kebiasaanPersen, tertinggi, terlemah };
+    },
     async listStudentsByName(institutionId, query, kelasId){
       const madrasahId = await getMadrasahId();
       let q = supabaseClient.from('v_siswa_login')
@@ -528,7 +604,7 @@ function makeAmanahAdapter(supabaseClient){
         id: s.id,
         full_name: s.nama,
         jenjang: s.jenjang,
-        class_name: s.tingkat ? `${s.tingkat}${s.paralel}` : ''
+        class_name: formatKelas(s.tingkat, s.paralel)
       }));
     },
     async listParentsByPhone(phone){
@@ -545,7 +621,7 @@ function makeAmanahAdapter(supabaseClient){
         .select('id, nama, jenjang, tingkat, paralel').in('id', siswaIds);
       const children = (siswaRows || []).map(s => ({
         id: s.id, full_name: s.nama, jenjang: s.jenjang,
-        class_name: s.tingkat ? `${s.tingkat}${s.paralel}` : ''
+        class_name: formatKelas(s.tingkat, s.paralel)
       }));
       return { id: linkRow.id, full_name: linkRow.nama_ortu, children };
     },
@@ -801,7 +877,7 @@ function StudentPicker({ adapter, onPick, onBack }){
           <select value={selectedKelas} onChange={e => setSelectedKelas(e.target.value)}>
             <option value="">Semua kelas</option>
             {kelasList.map(k => (
-              <option key={k.id} value={k.id}>Kelas {k.tingkat}{k.paralel}</option>
+              <option key={k.id} value={k.id}>Kelas {formatKelas(k.tingkat, k.paralel)}</option>
             ))}
           </select>
         )}
@@ -1319,7 +1395,124 @@ function PegawaiPicker({ adapter, onPick, onBack }){
   );
 }
 
-function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring }){
+function RadarChart({ data, size = 340 }){
+  // data: [{ label, value (0-100), color }]
+  const center = size / 2;
+  const radius = size / 2 - 85; // margin besar khusus supaya label tidak kepotong tepi
+  const n = data.length;
+  const angleFor = (i) => (Math.PI * 2 * i) / n - Math.PI / 2;
+  const pointFor = (i, value) => {
+    const r = (value / 100) * radius;
+    const a = angleFor(i);
+    return [center + r * Math.cos(a), center + r * Math.sin(a)];
+  };
+  const polygonPoints = data.map((d, i) => pointFor(i, d.value).join(',')).join(' ');
+  const rings = [25, 50, 75, 100];
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} width="100%" style={{maxWidth:size, display:'block', margin:'0 auto'}}>
+      {rings.map(r => {
+        const pts = data.map((_, i) => pointFor(i, r).join(',')).join(' ');
+        return <polygon key={r} points={pts} fill="none" stroke="var(--border)" strokeWidth="1" />;
+      })}
+      {data.map((d, i) => {
+        const [x, y] = pointFor(i, 100);
+        return <line key={i} x1={center} y1={center} x2={x} y2={y} stroke="var(--border)" strokeWidth="1" />;
+      })}
+      <polygon points={polygonPoints} fill="var(--green-600)" fillOpacity="0.35" stroke="var(--green-700)" strokeWidth="2" />
+      {data.map((d, i) => {
+        const [x, y] = pointFor(i, d.value);
+        return <circle key={i} cx={x} cy={y} r="3.5" fill="var(--green-700)" />;
+      })}
+      {data.map((d, i) => {
+        const [lx, ly] = pointFor(i, 122);
+        const words = d.label.split(' ').slice(0, 2); // maksimal 2 baris biar tidak kepanjangan
+        return (
+          <text key={i} x={lx} y={ly} fontSize="9.5" fontWeight="700" fill="var(--ink-soft)" textAnchor="middle" dominantBaseline="middle">
+            <tspan x={lx} dy="-6">{d.icon}</tspan>
+            {words.map((w, wi) => (
+              <tspan key={wi} x={lx} dy={wi === 0 ? 12 : 11}>{w}</tspan>
+            ))}
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
+
+function KepalaMadrasahDashboard({ adapter, pegawai, onBack }){
+  const [kelasList, setKelasList] = useState([]);
+  const [selectedKelasId, setSelectedKelasId] = useState('');
+  const [analisis, setAnalisis] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { adapter.listKelasForMadrasah().then(setKelasList); }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    adapter.getAnalisisKelas(selectedKelasId || null).then(a => { setAnalisis(a); setLoading(false); });
+  }, [selectedKelasId]);
+
+  const radarData = analisis ? HABITS.map(h => ({
+    label: h.name, icon: h.icon, value: analisis.kebiasaanPersen[h.code] || 0
+  })) : [];
+
+  const habitName = (kode) => HABITS.find(h => h.code === kode)?.name || kode;
+  const habitIcon = (kode) => HABITS.find(h => h.code === kode)?.icon || '';
+
+  return (
+    <div className="dash">
+      <div className="dash-header">
+        <div>
+          <button className="back-btn" onClick={onBack} aria-label="Kembali" style={{marginBottom:8}}>←</button>
+          <h1>Analisis Pembiasaan</h1>
+          <p className="sub">{pegawai ? `${pegawai.nama} · ${pegawai.jabatan}` : ''}</p>
+        </div>
+        <div style={{textAlign:'right', minWidth:160}}>
+          <p style={{margin:'0 0 4px', fontSize:12, color:'var(--gold-200)'}}>Pilih kelas</p>
+          <select value={selectedKelasId} onChange={e => setSelectedKelasId(e.target.value)}
+            style={{marginBottom:0, background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.25)', color:'var(--cream)'}}>
+            <option value="" style={{color:'#000', background:'#fff'}}>Semua kelas</option>
+            {kelasList.map(k => <option key={k.id} value={k.id} style={{color:'#000', background:'#fff'}}>Kelas {formatKelas(k.tingkat, k.paralel)}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="dash-body">
+        {loading || !analisis ? (
+          <p style={{fontSize:13, color:'var(--ink-faint)'}}>Memuat analisis...</p>
+        ) : (
+          <React.Fragment>
+            <div className="kpi-grid">
+              <div className="kpi-card"><p className="kpi-label">Jumlah Siswa</p><p className="kpi-value">{analisis.jumlahSiswa}</p></div>
+              <div className="kpi-card"><p className="kpi-label">Kelengkapan Monitoring (hari ini)</p><p className="kpi-value">{analisis.kelengkapanHariIni}%</p></div>
+              <div className="kpi-card">
+                <p className="kpi-label">Kebiasaan Tertinggi</p>
+                <p className="kpi-value" style={{fontSize:17, color:'var(--green-700)'}}>{analisis.tertinggi ? `${habitIcon(analisis.tertinggi.kode)} ${analisis.tertinggi.persen}%` : '-'}</p>
+                <p style={{fontSize:10.5, color:'var(--ink-soft)', margin:0}}>{analisis.tertinggi ? habitName(analisis.tertinggi.kode) : ''}</p>
+              </div>
+              <div className="kpi-card">
+                <p className="kpi-label">Perlu Diperkuat</p>
+                <p className="kpi-value" style={{fontSize:17, color:'var(--rust-500)'}}>{analisis.terlemah ? `${habitIcon(analisis.terlemah.kode)} ${analisis.terlemah.persen}%` : '-'}</p>
+                <p style={{fontSize:10.5, color:'var(--ink-soft)', margin:0}}>{analisis.terlemah ? habitName(analisis.terlemah.kode) : ''}</p>
+              </div>
+            </div>
+
+            <p className="section-title" style={{marginTop:4}}>Persentase 7 kebiasaan (30 hari terakhir)</p>
+            <div style={{background:'var(--paper)', borderRadius:16, padding:'24px 16px 32px', marginBottom:20}}>
+              <RadarChart data={radarData} />
+            </div>
+
+            <div className="lead-note">
+              "Kelengkapan Monitoring" menunjukkan seberapa banyak yang benar-benar dicatat hari ini -- terpisah dari "Persentase 7 Kebiasaan" yang menunjukkan kualitas kebiasaannya. Kelengkapan rendah bukan berarti kebiasaan buruk -- bisa jadi cuma belum sempat dicatat.
+            </div>
+          </React.Fragment>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring, onOpenAnalisis }){
   const isAdmin = pegawai.role === 'kepala_madrasah' || pegawai.role === 'admin';
   const [kelasList, setKelasList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1337,6 +1530,15 @@ function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring 
         <p className="sub">Gerakan 7 Kebiasaan Anak Indonesia Hebat · TP 2026/2027</p>
       </div>
       <div className="content-pad">
+        {isAdmin && (
+          <div className="habit-card" style={{background:'var(--gold-100)', marginBottom:18}} onClick={onOpenAnalisis}>
+            <div className="habit-icon" style={{background:'var(--gold-400)', color:'var(--gold-800)'}}>📊</div>
+            <div className="habit-body">
+              <p className="habit-name">Analisis Pembiasaan</p>
+              <p className="habit-status" style={{color:'var(--gold-800)'}}>Radar 7 kebiasaan, kelengkapan monitoring</p>
+            </div>
+          </div>
+        )}
         <p className="section-title">Monitoring per kelas</p>
         {loading && <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Memuat daftar kelas...</p>}
         {!loading && kelasList.length === 0 && (
@@ -1344,9 +1546,9 @@ function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring 
         )}
         {kelasList.map(k => (
           <div key={k.id} className="habit-card" style={{background:'var(--paper)'}} onClick={() => onOpenMonitoring(k)}>
-            <div className="habit-icon" style={{background:'var(--green-700)', color:'white', fontWeight:700}}>{k.tingkat}{k.paralel}</div>
+            <div className="habit-icon" style={{background:'var(--green-700)', color:'white', fontWeight:700, fontSize: (k.paralel && k.paralel.length > 2) ? 13 : 16}}>{k.tingkat}{k.paralel && k.paralel.length <= 2 ? k.paralel : ''}</div>
             <div className="habit-body">
-              <p className="habit-name">Kelas {k.tingkat}{k.paralel}</p>
+              <p className="habit-name">Kelas {formatKelas(k.tingkat, k.paralel)}</p>
               <p className="habit-status" style={{color:'var(--ink-soft)'}}>Ketuk untuk buka monitoring</p>
             </div>
           </div>
@@ -1411,7 +1613,7 @@ function GuruScreen({ adapter, pegawai, kelas, onToast, onBack }){
         <div>
           <button className="back-btn" onClick={onBack} aria-label="Kembali" style={{marginBottom:8}}>←</button>
           <h1>Monitoring 7 Kebiasaan</h1>
-          <p className="sub">{kelas ? `Kelas ${kelas.tingkat}${kelas.paralel} · ` : ''}{pegawai ? `${pegawai.nama}` : ''} — input massal per kelas</p>
+          <p className="sub">{kelas ? `Kelas ${formatKelas(kelas.tingkat, kelas.paralel)} · ` : ''}{pegawai ? `${pegawai.nama}` : ''} — input massal per kelas</p>
         </div>
         <div style={{textAlign:'right'}}>
           <p style={{margin:0, fontSize:12, color:'var(--gold-200)'}}>Tanggal</p>
@@ -1505,6 +1707,10 @@ function App(){
         <div style={{width:'100%', maxWidth:980}}>
           <GuruScreen adapter={adapter} pegawai={pegawai} kelas={selectedKelas} onToast={showToast} onBack={() => setStep('pegawai-dashboard')} />
         </div>
+      ) : step === 'analisis' ? (
+        <div style={{width:'100%', maxWidth:980}}>
+          <KepalaMadrasahDashboard adapter={adapter} pegawai={pegawai} onBack={() => setStep('pegawai-dashboard')} />
+        </div>
       ) : (
         <div className="phone">
           {step === 'login' && <LoginScreen onSelectRole={handleSelectRole} adapter={adapter} institution={institution} onChangeInstitution={adapter.needsInstitutionPick ? () => setStep('pick-institution') : null} />}
@@ -1512,7 +1718,7 @@ function App(){
           {step === 'jurnal' && student && <SiswaJurnal adapter={adapter} student={student} onToast={showToast} onBack={() => { setStudent(null); setStep('login'); }} />}
           {step === 'ortu' && <OrtuScreen adapter={adapter} onToast={showToast} onBack={() => setStep('login')} />}
           {step === 'pick-pegawai' && <PegawaiPicker adapter={adapter} onPick={(p) => { setPegawai(p); setStep('pegawai-dashboard'); }} onBack={() => setStep('login')} />}
-          {step === 'pegawai-dashboard' && pegawai && <PegawaiDashboard adapter={adapter} pegawai={pegawai} onToast={showToast} onBack={() => { setPegawai(null); setStep('login'); }} onOpenMonitoring={(k) => { setSelectedKelas(k); setStep('monitoring'); }} />}
+          {step === 'pegawai-dashboard' && pegawai && <PegawaiDashboard adapter={adapter} pegawai={pegawai} onToast={showToast} onBack={() => { setPegawai(null); setStep('login'); }} onOpenMonitoring={(k) => { setSelectedKelas(k); setStep('monitoring'); }} onOpenAnalisis={() => setStep('analisis')} />}
         </div>
       )}
       <Toast message={toast} />
