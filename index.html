@@ -282,8 +282,10 @@ function makeDemoAdapter(){
   return {
     mode: 'demo',
     persistent: !!hasPersistentStorage,
+    needsInstitutionPick: false, // demo cukup 1 lembaga contoh, langsung lanjut
+    async setMadrasahId(id){ /* tidak relevan di mode demo */ },
     async listInstitutions(){
-      return [{ id:'demo-1', name:'MIN 8 Kota Banda Aceh', jenjang:'MI' }];
+      return [{ id:'demo-1', nama:'MIN 8 Kota Banda Aceh (contoh)', jenjang:'MI' }];
     },
     async listStudentsByName(institutionId, query){
       const all = [
@@ -441,49 +443,19 @@ function makeDemoAdapter(){
 }
 
 // Placeholder — diisi nanti saat integrasi Supabase sungguhan.
+// Adapter standalone -- SEKARANG memakai logika yang sama persis dengan
+// adapter Amanah, karena Bagian A skema (madrasah/pegawai/kelas/siswa/
+// ortu_siswa_link) di si-aneuk-hebat-schema.sql sengaja disamakan konvensi
+// penamaannya dengan tabel Amanah asli sejak awal. Perbedaan mode standalone
+// vs amanah bukan di query data (sama persis), tapi di SIAPA yang mengisi
+// data madrasah/pegawai/kelas/siswa pertama kali:
+//   - mode amanah: sudah diisi lewat aplikasi Amanah, kita cuma baca
+//   - mode standalone: BELUM ada yang isi -- perlu layar admin CRUD
+//     tersendiri (belum dibangun, menyusul kalau ada madrasah standalone
+//     konkret yang mau pakai)
 function makeStandaloneAdapter(supabaseClient){
-  return {
-    mode:'standalone',
-    async listInstitutions(){
-      const { data } = await supabaseClient.from('institutions').select('*');
-      return data || [];
-    },
-    async listStudentsByName(institutionId, query){
-      const { data } = await supabaseClient.from('students').select('id, full_name, class_id, jenjang')
-        .eq('institution_id', institutionId).ilike('full_name', `%${query}%`);
-      return data || [];
-    },
-    async getTodayEntries(studentId){
-      const today = new Date().toISOString().slice(0,10);
-      const { data } = await supabaseClient.from('habit_entries').select('habit_id, status')
-        .eq('student_id', studentId).eq('entry_date', today);
-      const result = {};
-      HABITS.forEach(h => { result[h.code] = 'belum_terbiasa'; });
-      (data||[]).forEach(row => { /* mapping kebiasaan_id -> kode perlu join, disederhanakan di sini */ });
-      return result;
-    },
-    async recordEntry(studentId, habitCode, recordedRole, status){
-      return supabaseClient.from('jurnal_kebiasaan').insert({ siswa_id: studentId, tanggal: new Date().toISOString().slice(0,10), status: status || 'sudah_terbiasa', peran_pencatat: recordedRole });
-    },
-    async getStreak(studentId){ return 0; },
-    async listKelasForMadrasah(){ return []; },
-    async getHabitConsistency(studentId){ return { consistency:{}, totalCatatan:0, hariAktif:0 }; },
-    async getMisiHariIni(studentId){ return MISI_HARIAN.map(m => ({ ...m, selesai:false })); },
-    async toggleMisi(studentId, misiId){ return []; },
-    async getWeeklyActiveDays(studentId){ return 0; },
-    async getSubIbadahToday(studentId){ return SUB_IBADAH.map(s => ({ ...s, dilakukan:false })); },
-    async recordSubIbadahBulk(studentId, subEntries){ return { ok:true }; },
-    async listParentsByPhone(phone){
-      const { data } = await supabaseClient.from('people').select('id, full_name, phone').eq('phone', phone).eq('role','ortu').maybeSingle();
-      if (!data) return null;
-      const { data: links } = await supabaseClient.from('parent_student_links').select('student_id, students(id, full_name, class_id, jenjang)').eq('parent_person_id', data.id);
-      return { ...data, children: (links||[]).map(l => l.students) };
-    },
-    async listClassRoster(classId){
-      const { data } = await supabaseClient.from('students').select('id, full_name').eq('class_id', classId);
-      return data || [];
-    }
-  };
+  const base = makeAmanahAdapter(supabaseClient);
+  return { ...base, mode: 'standalone' };
 }
 
 // Adapter Amanah -- membaca tabel Amanah asli (madrasah/siswa/kelas/pegawai)
@@ -491,11 +463,11 @@ function makeStandaloneAdapter(supabaseClient){
 // (kebiasaan/jurnal_kebiasaan/sub_kebiasaan/dst). Single-tenant untuk pilot
 // ini -- madrasah_id diambil sekali dari baris madrasah pertama dan di-cache.
 function makeAmanahAdapter(supabaseClient){
-  // Amanah bersifat multi-tenant (satu project Supabase bisa menampung
-  // banyak madrasah/sekolah). Untuk pilot ini, dikunci ke MIN 8 Kota
-  // Banda Aceh -- jangan asal ambil baris pertama, karena project yang
-  // sama juga menyimpan MTsN 1 Banda Aceh dan SD Negeri Lambada Klieng.
-  const MADRASAH_ID_PILOT = '844344e4-dc56-4f69-9d33-da31f5f86798'; // MIN 8 Kota Banda Aceh
+  // Amanah bersifat multi-tenant (satu project Supabase menampung banyak
+  // madrasah/sekolah -- MIN 8 Kota Banda Aceh, MTsN 1 Banda Aceh, SD
+  // Negeri Lambada Klieng, dan berpotensi lembaga lain menyusul). Karena
+  // itu madrasah_id TIDAK di-hardcode -- harus dipilih dulu lewat
+  // setMadrasahId() sebelum fungsi lain dipakai (lihat InstitutionPicker).
   let cachedMadrasahId = null;
   let kodeToId = null;   // { bangun_pagi: 'uuid', ... }
   let idToKode = null;   // { 'uuid': 'bangun_pagi', ... }
@@ -503,10 +475,7 @@ function makeAmanahAdapter(supabaseClient){
   let subIdToKode = null;
 
   async function getMadrasahId(){
-    if (cachedMadrasahId) return cachedMadrasahId;
-    const { data, error } = await supabaseClient.from('madrasah').select('id').eq('id', MADRASAH_ID_PILOT).maybeSingle();
-    if (error || !data) throw new Error('MIN 8 Kota Banda Aceh tidak ditemukan di tabel madrasah -- cek MADRASAH_ID_PILOT.');
-    cachedMadrasahId = data.id;
+    if (!cachedMadrasahId) throw new Error('Lembaga belum dipilih -- panggil adapter.setMadrasahId() dulu.');
     return cachedMadrasahId;
   }
 
@@ -532,8 +501,10 @@ function makeAmanahAdapter(supabaseClient){
   return {
     mode: 'amanah',
     persistent: true,
+    needsInstitutionPick: true,
+    async setMadrasahId(id){ cachedMadrasahId = id; },
     async listInstitutions(){
-      const { data } = await supabaseClient.from('madrasah').select('id, nama, jenjang');
+      const { data } = await supabaseClient.from('madrasah').select('id, nama, jenjang, kabupaten_kota').order('nama');
       return data || [];
     },
     async listKelasForMadrasah(){
@@ -549,7 +520,7 @@ function makeAmanahAdapter(supabaseClient){
         .select('id, nama, jenjang, tingkat, paralel')
         .eq('madrasah_id', madrasahId)
         .ilike('nama', `%${query || ''}%`)
-        .limit(30);
+        .limit(60);
       if (kelasId) q = q.eq('kelas_id', kelasId);
       const { data, error } = await q;
       if (error) { console.error(error); return []; }
@@ -591,7 +562,8 @@ function makeAmanahAdapter(supabaseClient){
         .select('id, nama, nip_nik, jabatan, role')
         .eq('madrasah_id', madrasahId)
         .ilike('nama', `%${query || ''}%`)
-        .limit(15);
+        .order('nama')
+        .limit(200);
       return (data || []).map(p => ({ id:p.id, nama:p.nama, jabatan:p.jabatan, role:p.role }));
     },
     async getTodayEntries(studentId){
@@ -737,14 +709,55 @@ function Toast({ message }){
   return <div className="toast">{message}</div>;
 }
 
-function LoginScreen({ onSelectRole, adapter }){
+function InstitutionPicker({ adapter, onPick }){
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { adapter.listInstitutions().then(l => { setList(l); setLoading(false); }); }, []);
+
+  const handlePick = async (inst) => {
+    await adapter.setMadrasahId(inst.id);
+    onPick(inst);
+  };
+
   return (
     <div className="phone-screen" style={{background:'var(--green-900)', color:'var(--cream)', padding:'40px 26px', justifyContent:'center'}}>
       <div style={{width:64, height:64, borderRadius:16, background:'var(--gold-400)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 18px'}}>
         <span className="voice" style={{fontSize:22, fontWeight:700, color:'var(--gold-800)'}}>SA</span>
       </div>
       <h1 className="voice" style={{fontSize:22, textAlign:'center', margin:'0 0 6px'}}>SI-Aneuk Hebat</h1>
-      <p style={{fontSize:12.5, textAlign:'center', color:'#C7D3C8', margin:'0 0 28px'}}>Sistem Monitoring 7 Kebiasaan Anak Indonesia Hebat</p>
+      <p style={{fontSize:12.5, textAlign:'center', color:'#C7D3C8', margin:'0 0 24px'}}>Pilih lembaga Anda untuk mulai</p>
+
+      {loading && <p style={{fontSize:12.5, textAlign:'center', color:'var(--gold-200)'}}>Memuat daftar lembaga...</p>}
+      {!loading && list.length === 0 && <p style={{fontSize:12.5, textAlign:'center', color:'var(--gold-200)'}}>Belum ada lembaga terdaftar.</p>}
+
+      {list.map(inst => (
+        <div key={inst.id} className="login-card" onClick={() => handlePick(inst)}>
+          <div style={{fontSize:18}}>🕌</div>
+          <div>
+            <p style={{margin:0, fontWeight:700, fontSize:13.5, color:'var(--ink)'}}>{inst.nama || inst.name}</p>
+            <p style={{margin:0, fontSize:11, color:'var(--ink-soft)'}}>{inst.jenjang}{inst.kabupaten_kota ? ` · ${inst.kabupaten_kota}` : ''}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LoginScreen({ onSelectRole, adapter, institution, onChangeInstitution }){
+  return (
+    <div className="phone-screen" style={{background:'var(--green-900)', color:'var(--cream)', padding:'40px 26px', justifyContent:'center'}}>
+      <div style={{width:64, height:64, borderRadius:16, background:'var(--gold-400)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 18px'}}>
+        <span className="voice" style={{fontSize:22, fontWeight:700, color:'var(--gold-800)'}}>SA</span>
+      </div>
+      <h1 className="voice" style={{fontSize:22, textAlign:'center', margin:'0 0 6px'}}>SI-Aneuk Hebat</h1>
+      <p style={{fontSize:12.5, textAlign:'center', color:'#C7D3C8', margin:'0 0 4px'}}>Sistem Monitoring 7 Kebiasaan Anak Indonesia Hebat</p>
+      {institution && (
+        <p style={{fontSize:12, textAlign:'center', color:'var(--gold-200)', fontWeight:700, margin:'0 0 20px'}}>
+          {institution.nama || institution.name}
+          {onChangeInstitution && <span onClick={onChangeInstitution} style={{marginLeft:8, textDecoration:'underline', cursor:'pointer', fontWeight:400, color:'#C7D3C8'}}>(ganti lembaga)</span>}
+        </p>
+      )}
       <div className="login-card" onClick={() => onSelectRole('siswa')}>
         <div style={{fontSize:18}}>🎓</div>
         <div><p style={{margin:0, fontWeight:700, fontSize:13.5, color:'var(--ink)'}}>Masuk sebagai Siswa</p></div>
@@ -1467,7 +1480,8 @@ function GuruScreen({ adapter, pegawai, kelas, onToast, onBack }){
 
 function App(){
   const adapter = useMemo(() => getAdapter(), []);
-  const [step, setStep] = useState('login');
+  const [step, setStep] = useState(adapter.needsInstitutionPick ? 'pick-institution' : 'login');
+  const [institution, setInstitution] = useState(null);
   const [student, setStudent] = useState(null);
   const [pegawai, setPegawai] = useState(null);
   const [selectedKelas, setSelectedKelas] = useState(null);
@@ -1483,13 +1497,17 @@ function App(){
 
   return (
     <React.Fragment>
-      {step === 'monitoring' ? (
+      {step === 'pick-institution' ? (
+        <div className="phone">
+          <InstitutionPicker adapter={adapter} onPick={(inst) => { setInstitution(inst); setStep('login'); }} />
+        </div>
+      ) : step === 'monitoring' ? (
         <div style={{width:'100%', maxWidth:980}}>
           <GuruScreen adapter={adapter} pegawai={pegawai} kelas={selectedKelas} onToast={showToast} onBack={() => setStep('pegawai-dashboard')} />
         </div>
       ) : (
         <div className="phone">
-          {step === 'login' && <LoginScreen onSelectRole={handleSelectRole} adapter={adapter} />}
+          {step === 'login' && <LoginScreen onSelectRole={handleSelectRole} adapter={adapter} institution={institution} onChangeInstitution={adapter.needsInstitutionPick ? () => setStep('pick-institution') : null} />}
           {step === 'pick-student' && <StudentPicker adapter={adapter} onPick={(s) => { setStudent(s); setStep('jurnal'); }} onBack={() => setStep('login')} />}
           {step === 'jurnal' && student && <SiswaJurnal adapter={adapter} student={student} onToast={showToast} onBack={() => { setStudent(null); setStep('login'); }} />}
           {step === 'ortu' && <OrtuScreen adapter={adapter} onToast={showToast} onBack={() => setStep('login')} />}
