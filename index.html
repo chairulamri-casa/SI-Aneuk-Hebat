@@ -102,6 +102,16 @@
   .siswa-avatar{width:34px; height:34px; border-radius:50%; background:var(--teal-100); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:var(--teal-700); flex-shrink:0;}
   .role-tag{font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:8px; background:var(--gold-100); color:var(--gold-800); margin-left:auto;}
   .kelas-tag{font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:8px; background:var(--teal-100); color:var(--teal-700); margin-left:auto;}
+  .laporan-kop{text-align:center; padding-bottom:14px; margin-bottom:14px; border-bottom:2px solid var(--ink);}
+  .laporan-table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .laporan-table th, .laporan-table td{border:1px solid var(--border); padding:8px 10px; text-align:left;}
+  .laporan-table th{background:var(--paper); font-weight:700;}
+  @media print{
+    body *{visibility:hidden;}
+    #laporan-print-area, #laporan-print-area *{visibility:visible;}
+    #laporan-print-area{position:absolute; top:0; left:0; width:100%; padding:20px;}
+    .no-print{display:none !important;}
+  }
 </style>
 </head>
 <body>
@@ -444,6 +454,33 @@ function makeDemoAdapter(){
         terlemah: { kode:'gemar_belajar', persen:40 }
       };
     },
+    async getRekapBulanan(kelasId, bulan, tahun){
+      const perHabit = {
+        bangun_pagi: [12,15], beribadah: [14,15], berolahraga: [9,15], makan_sehat: [11,15],
+        gemar_belajar: [6,15], bermasyarakat: [7,15], tidur_cepat: [15,15]
+      };
+      let totalSudah = 0, totalEntri = 0;
+      const hasil = HABITS.map(h => {
+        const [sudah, total] = perHabit[h.code] || [0,0];
+        totalSudah += sudah; totalEntri += total;
+        return { kode:h.code, nama:h.name, icon:h.icon, sudah, total, persen: total>0?Math.round((sudah/total)*100):0 };
+      });
+      const indeks = totalEntri > 0 ? Math.round((totalSudah/totalEntri)*100) : 0;
+      return { indeks, perHabit: hasil };
+    },
+    async getRekapHarian(kelasId, tanggal){
+      const perHabit = {
+        bangun_pagi: [1,1], beribadah: [1,1], berolahraga: [0,1], makan_sehat: [1,1],
+        gemar_belajar: [0,1], bermasyarakat: [1,1], tidur_cepat: [1,1]
+      };
+      return { perHabit: HABITS.map(h => {
+        const [sudah, total] = perHabit[h.code] || [0,0];
+        return { kode:h.code, nama:h.name, icon:h.icon, sudah, total, persen: total>0?Math.round((sudah/total)*100):0 };
+      })};
+    },
+    async getMadrasahInfo(){
+      return { nama:'MIN 8 Kota Banda Aceh (contoh)', alamat:'', kabupaten_kota:'Banda Aceh', logo_url:null };
+    },
     async listPegawai(query){
       const all = [
         { id:'p1', nama:'Nurul Huda, S.Pd.I', jabatan:'Guru', role:'wali_kelas', kelas:'VIII-A' },
@@ -536,7 +573,7 @@ function makeAmanahAdapter(supabaseClient){
     async listKelasForMadrasah(){
       const madrasahId = await getMadrasahId();
       const { data, error } = await supabaseClient.from('v_kelas_publik')
-        .select('id, tingkat, paralel').eq('madrasah_id', madrasahId).order('tingkat').order('paralel');
+        .select('id, tingkat, paralel, wali_kelas_id').eq('madrasah_id', madrasahId).order('tingkat').order('paralel');
       if (error) { console.error(error); return []; }
       return data || [];
     },
@@ -589,6 +626,77 @@ function makeAmanahAdapter(supabaseClient){
       });
 
       return { jumlahSiswa, kelengkapanHariIni, kebiasaanPersen, tertinggi, terlemah };
+    },
+    async getRekapBulanan(kelasId, bulan, tahun){
+      const madrasahId = await getMadrasahId();
+      const { idToKode } = await getKebiasaanMap();
+
+      let sq = supabaseClient.from('v_siswa_login').select('id').eq('madrasah_id', madrasahId);
+      if (kelasId) sq = sq.eq('kelas_id', kelasId);
+      const { data: siswaRows } = await sq;
+      const siswaIds = (siswaRows || []).map(s => s.id);
+
+      if (siswaIds.length === 0) return { indeks: 0, perHabit: HABITS.map(h => ({ kode:h.code, nama:h.name, icon:h.icon, sudah:0, total:0, persen:0 })) };
+
+      // Rentang tanggal awal-akhir bulan (bulan: 1-12)
+      const awal = `${tahun}-${String(bulan).padStart(2,'0')}-01`;
+      const akhirDate = new Date(tahun, bulan, 0); // hari terakhir bulan itu
+      const akhir = akhirDate.toISOString().slice(0,10);
+
+      const { data: rows } = await supabaseClient.from('jurnal_kebiasaan')
+        .select('kebiasaan_id, status').in('siswa_id', siswaIds).gte('tanggal', awal).lte('tanggal', akhir);
+
+      const tally = {};
+      HABITS.forEach(h => { tally[h.code] = { sudah:0, total:0 }; });
+      (rows || []).forEach(row => {
+        const kode = idToKode[row.kebiasaan_id];
+        if (!kode || !tally[kode]) return;
+        tally[kode].total++;
+        if (row.status === 'sudah_terbiasa') tally[kode].sudah++;
+      });
+
+      let totalSudah = 0, totalEntri = 0;
+      const perHabit = HABITS.map(h => {
+        const t = tally[h.code];
+        totalSudah += t.sudah; totalEntri += t.total;
+        return { kode:h.code, nama:h.name, icon:h.icon, sudah:t.sudah, total:t.total, persen: t.total>0?Math.round((t.sudah/t.total)*100):0 };
+      });
+      const indeks = totalEntri > 0 ? Math.round((totalSudah/totalEntri)*100) : 0;
+      return { indeks, perHabit };
+    },
+    async getRekapHarian(kelasId, tanggal){
+      const madrasahId = await getMadrasahId();
+      const { idToKode } = await getKebiasaanMap();
+
+      let sq = supabaseClient.from('v_siswa_login').select('id').eq('madrasah_id', madrasahId);
+      if (kelasId) sq = sq.eq('kelas_id', kelasId);
+      const { data: siswaRows } = await sq;
+      const siswaIds = (siswaRows || []).map(s => s.id);
+
+      if (siswaIds.length === 0) return { perHabit: HABITS.map(h => ({ kode:h.code, nama:h.name, icon:h.icon, sudah:0, total:0, persen:0 })) };
+
+      const { data: rows } = await supabaseClient.from('jurnal_kebiasaan')
+        .select('kebiasaan_id, status').in('siswa_id', siswaIds).eq('tanggal', tanggal);
+
+      const tally = {};
+      HABITS.forEach(h => { tally[h.code] = { sudah:0, total:0 }; });
+      (rows || []).forEach(row => {
+        const kode = idToKode[row.kebiasaan_id];
+        if (!kode || !tally[kode]) return;
+        tally[kode].total++;
+        if (row.status === 'sudah_terbiasa') tally[kode].sudah++;
+      });
+
+      const perHabit = HABITS.map(h => {
+        const t = tally[h.code];
+        return { kode:h.code, nama:h.name, icon:h.icon, sudah:t.sudah, total:t.total, persen: t.total>0?Math.round((t.sudah/t.total)*100):0 };
+      });
+      return { perHabit };
+    },
+    async getMadrasahInfo(){
+      const madrasahId = await getMadrasahId();
+      const { data } = await supabaseClient.from('madrasah').select('nama, alamat, kabupaten_kota, logo_url').eq('id', madrasahId).maybeSingle();
+      return data || { nama:'', alamat:'', kabupaten_kota:'', logo_url:null };
     },
     async listStudentsByName(institutionId, query, kelasId){
       const madrasahId = await getMadrasahId();
@@ -1512,13 +1620,246 @@ function KepalaMadrasahDashboard({ adapter, pegawai, onBack }){
   );
 }
 
-function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring, onOpenAnalisis }){
+const STATUS_LABEL_PERSEN = (pct) => {
+  if (pct >= 80) return { label:'Sangat Baik', color:'var(--green-600)', dot:'🟢' };
+  if (pct >= 40) return { label:'Perlu Penguatan', color:'var(--gold-600)', dot:'🟡' };
+  return { label:'Perlu Pendampingan', color:'var(--rust-500)', dot:'🔴' };
+};
+
+const NAMA_BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+
+function RekapBulananScreen({ adapter, pegawai, onBack }){
+  const now = new Date();
+  const [kelasList, setKelasList] = useState([]);
+  const [selectedKelasId, setSelectedKelasId] = useState('');
+  const [bulan, setBulan] = useState(now.getMonth() + 1);
+  const [tahun, setTahun] = useState(now.getFullYear());
+  const [rekap, setRekap] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { adapter.listKelasForMadrasah().then(setKelasList); }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    adapter.getRekapBulanan(selectedKelasId || null, bulan, tahun).then(r => { setRekap(r); setLoading(false); });
+  }, [selectedKelasId, bulan, tahun]);
+
+  return (
+    <div className="dash">
+      <div className="dash-header">
+        <div>
+          <button className="back-btn" onClick={onBack} aria-label="Kembali" style={{marginBottom:8}}>←</button>
+          <h1>Rekap Bulanan</h1>
+          <p className="sub">Rekapitulasi capaian pembiasaan per bulan</p>
+        </div>
+        <div style={{display:'flex', gap:10, flexWrap:'wrap', justifyContent:'flex-end'}}>
+          <div>
+            <p style={{margin:'0 0 4px', fontSize:11, color:'var(--gold-200)'}}>Bulan</p>
+            <select value={bulan} onChange={e => setBulan(Number(e.target.value))}
+              style={{marginBottom:0, background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.25)', color:'var(--cream)'}}>
+              {NAMA_BULAN.map((b, i) => <option key={i} value={i+1} style={{color:'#000', background:'#fff'}}>{b}</option>)}
+            </select>
+          </div>
+          <div>
+            <p style={{margin:'0 0 4px', fontSize:11, color:'var(--gold-200)'}}>Tahun</p>
+            <select value={tahun} onChange={e => setTahun(Number(e.target.value))}
+              style={{marginBottom:0, background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.25)', color:'var(--cream)'}}>
+              {[tahun-1, tahun, tahun+1].map(t => <option key={t} value={t} style={{color:'#000', background:'#fff'}}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <p style={{margin:'0 0 4px', fontSize:11, color:'var(--gold-200)'}}>Kelas</p>
+            <select value={selectedKelasId} onChange={e => setSelectedKelasId(e.target.value)}
+              style={{marginBottom:0, background:'rgba(255,255,255,0.12)', border:'1px solid rgba(255,255,255,0.25)', color:'var(--cream)'}}>
+              <option value="" style={{color:'#000', background:'#fff'}}>Semua kelas</option>
+              {kelasList.map(k => <option key={k.id} value={k.id} style={{color:'#000', background:'#fff'}}>Kelas {formatKelas(k.tingkat, k.paralel)}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+      <div className="dash-body">
+        {loading || !rekap ? (
+          <p style={{fontSize:13, color:'var(--ink-faint)'}}>Memuat rekap...</p>
+        ) : (
+          <React.Fragment>
+            <div style={{background:'linear-gradient(135deg, var(--green-700), var(--teal-700))', borderRadius:18, padding:'26px 20px', textAlign:'center', color:'white', marginBottom:22}}>
+              <p style={{margin:'0 0 6px', fontSize:13, opacity:0.85}}>Indeks Konsistensi Pembiasaan</p>
+              <p style={{margin:0, fontFamily:"'Fraunces',serif", fontSize:44, fontWeight:700}}>{rekap.indeks}%</p>
+              <p style={{margin:'6px 0 0', fontSize:12.5, opacity:0.85}}>{NAMA_BULAN[bulan-1]} {tahun}</p>
+            </div>
+
+            {rekap.perHabit.map(h => {
+              const s = STATUS_LABEL_PERSEN(h.persen);
+              return (
+                <div key={h.kode} className="side-card" style={{marginBottom:12}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6}}>
+                    <span style={{fontSize:13.5, fontWeight:700}}>{h.icon} {h.nama}</span>
+                    <span style={{fontSize:11.5, fontWeight:700, color:s.color}}>{s.dot} {s.label}</span>
+                  </div>
+                  <p style={{fontFamily:"'Fraunces',serif", fontSize:24, fontWeight:700, margin:'0 0 6px'}}>{h.persen}%</p>
+                  <div className="consist-track"><div className="consist-fill" style={{width:`${h.persen}%`, background:s.color}}></div></div>
+                  <p style={{fontSize:10.5, color:'var(--ink-soft)', margin:'6px 0 0', textAlign:'right'}}>{h.sudah}/{h.total} catatan</p>
+                </div>
+              );
+            })}
+          </React.Fragment>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LaporanScreen({ adapter, pegawai, onBack }){
+  const now = new Date();
+  const [jenis, setJenis] = useState('harian');
+  const [kelasList, setKelasList] = useState([]);
+  const [selectedKelasId, setSelectedKelasId] = useState('');
+  const [tanggal, setTanggal] = useState(now.toISOString().slice(0,10));
+  const [bulan, setBulan] = useState(now.getMonth() + 1);
+  const [tahun, setTahun] = useState(now.getFullYear());
+  const [madrasah, setMadrasah] = useState(null);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([adapter.listKelasForMadrasah(), adapter.getMadrasahInfo()]).then(([kl, mi]) => {
+      setKelasList(kl); setMadrasah(mi);
+    });
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    const req = jenis === 'harian'
+      ? adapter.getRekapHarian(selectedKelasId || null, tanggal)
+      : adapter.getRekapBulanan(selectedKelasId || null, bulan, tahun);
+    req.then(d => { setData(d); setLoading(false); });
+  }, [jenis, selectedKelasId, tanggal, bulan, tahun]);
+
+  const namaKelasTerpilih = selectedKelasId ? (() => {
+    const k = kelasList.find(x => x.id === selectedKelasId);
+    return k ? `Kelas ${formatKelas(k.tingkat, k.paralel)}` : 'Semua Tingkat';
+  })() : 'Semua Tingkat';
+
+  const periodeText = jenis === 'harian'
+    ? new Date(tanggal).toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
+    : `${NAMA_BULAN[bulan-1]} ${tahun}`;
+
+  return (
+    <div className="dash">
+      <div className="dash-header no-print">
+        <div>
+          <button className="back-btn" onClick={onBack} aria-label="Kembali" style={{marginBottom:8}}>←</button>
+          <h1>Laporan</h1>
+          <p className="sub">Generate dan cetak laporan pembiasaan</p>
+        </div>
+      </div>
+      <div className="dash-body">
+        <div className="no-print" style={{display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end', marginBottom:20, background:'var(--paper)', padding:16, borderRadius:14}}>
+          <div>
+            <p style={{margin:'0 0 4px', fontSize:11, fontWeight:700, color:'var(--ink-soft)'}}>Jenis Laporan</p>
+            <select value={jenis} onChange={e => setJenis(e.target.value)} style={{marginBottom:0}}>
+              <option value="harian">Laporan Harian</option>
+              <option value="bulanan">Laporan Bulanan</option>
+            </select>
+          </div>
+          {jenis === 'harian' ? (
+            <div>
+              <p style={{margin:'0 0 4px', fontSize:11, fontWeight:700, color:'var(--ink-soft)'}}>Tanggal</p>
+              <input type="date" value={tanggal} onChange={e => setTanggal(e.target.value)} style={{marginBottom:0}} />
+            </div>
+          ) : (
+            <React.Fragment>
+              <div>
+                <p style={{margin:'0 0 4px', fontSize:11, fontWeight:700, color:'var(--ink-soft)'}}>Bulan</p>
+                <select value={bulan} onChange={e => setBulan(Number(e.target.value))} style={{marginBottom:0}}>
+                  {NAMA_BULAN.map((b, i) => <option key={i} value={i+1}>{b}</option>)}
+                </select>
+              </div>
+              <div>
+                <p style={{margin:'0 0 4px', fontSize:11, fontWeight:700, color:'var(--ink-soft)'}}>Tahun</p>
+                <select value={tahun} onChange={e => setTahun(Number(e.target.value))} style={{marginBottom:0}}>
+                  {[tahun-1, tahun, tahun+1].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </React.Fragment>
+          )}
+          <div>
+            <p style={{margin:'0 0 4px', fontSize:11, fontWeight:700, color:'var(--ink-soft)'}}>Kelas</p>
+            <select value={selectedKelasId} onChange={e => setSelectedKelasId(e.target.value)} style={{marginBottom:0}}>
+              <option value="">Semua Tingkat</option>
+              {kelasList.map(k => <option key={k.id} value={k.id}>Kelas {formatKelas(k.tingkat, k.paralel)}</option>)}
+            </select>
+          </div>
+          <button className="btn btn-primary" style={{width:'auto', margin:0, padding:'10px 22px'}} onClick={() => window.print()}>
+            🖨️ Cetak / PDF
+          </button>
+        </div>
+
+        <div id="laporan-print-area" style={{background:'white', border:'1px solid var(--border)', borderRadius:12, padding:'28px 26px', maxWidth:640, margin:'0 auto'}}>
+          <div className="laporan-kop">
+            {madrasah && madrasah.logo_url && <img src={madrasah.logo_url} alt="logo" style={{width:56, height:56, margin:'0 auto 8px'}} />}
+            <p style={{margin:0, fontWeight:700, fontSize:16, textTransform:'uppercase'}}>{madrasah ? madrasah.nama : ''}</p>
+            <p style={{margin:'2px 0 0', fontSize:11, color:'var(--ink-soft)'}}>{madrasah && madrasah.alamat ? madrasah.alamat : (madrasah ? madrasah.kabupaten_kota : '')}</p>
+          </div>
+          <p style={{textAlign:'center', fontWeight:700, fontSize:15, margin:'0 0 2px'}}>Laporan {jenis === 'harian' ? 'Harian' : 'Bulanan'}</p>
+          <p style={{textAlign:'center', fontSize:12, margin:'0 0 2px'}}>Gerakan 7 Kebiasaan Anak Indonesia Hebat</p>
+          <p style={{textAlign:'center', fontSize:11.5, color:'var(--ink-soft)', margin:'0 0 18px'}}>Periode: {periodeText} · {namaKelasTerpilih}</p>
+
+          {loading || !data ? (
+            <p style={{fontSize:12.5, textAlign:'center', color:'var(--ink-faint)'}}>Memuat data laporan...</p>
+          ) : (
+            <table className="laporan-table">
+              <thead>
+                <tr><th>Kebiasaan</th><th>Sudah</th><th>Total</th><th>Persentase</th><th>Capaian</th></tr>
+              </thead>
+              <tbody>
+                {data.perHabit.map(h => {
+                  const s = STATUS_LABEL_PERSEN(h.persen);
+                  return (
+                    <tr key={h.kode}>
+                      <td>{h.icon} {h.nama}</td>
+                      <td>{h.sudah}</td>
+                      <td>{h.total}</td>
+                      <td>{h.persen}%</td>
+                      <td style={{color:s.color, fontWeight:700}}>{s.dot} {s.label}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+
+          <div style={{display:'flex', justifyContent:'space-between', marginTop:40, fontSize:11}}>
+            <div>
+              <p style={{margin:'0 0 40px'}}>Dicetak oleh: {pegawai ? pegawai.nama : '-'}</p>
+              <p style={{margin:0, borderTop:'1px solid var(--ink)', paddingTop:4, width:160}}>Wali Kelas / Petugas</p>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <p style={{margin:'0 0 40px'}}>Mengetahui,</p>
+              <p style={{margin:0, borderTop:'1px solid var(--ink)', paddingTop:4, width:160}}>Kepala Madrasah</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring, onOpenAnalisis, onOpenRekapBulanan, onOpenLaporan }){
   const isAdmin = pegawai.role === 'kepala_madrasah' || pegawai.role === 'admin';
   const [kelasList, setKelasList] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    adapter.listKelasForMadrasah().then(list => { setKelasList(list); setLoading(false); });
+    adapter.listKelasForMadrasah().then(list => {
+      // Kepala madrasah/admin lihat semua kelas. Guru/wali kelas biasa
+      // cuma lihat kelas yang wali_kelas_id-nya cocok dengan dirinya --
+      // pembatasan ini di level tampilan (belum di RLS, sesuai keputusan
+      // "biarkan longgar dulu" untuk login yang belum pakai auth sungguhan).
+      const filtered = isAdmin ? list : list.filter(k => k.wali_kelas_id === pegawai.id);
+      setKelasList(filtered);
+      setLoading(false);
+    });
   }, []);
 
   return (
@@ -1531,7 +1872,7 @@ function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring,
       </div>
       <div className="content-pad">
         {isAdmin && (
-          <div className="habit-card" style={{background:'var(--gold-100)', marginBottom:18}} onClick={onOpenAnalisis}>
+          <div className="habit-card" style={{background:'var(--gold-100)', marginBottom:12}} onClick={onOpenAnalisis}>
             <div className="habit-icon" style={{background:'var(--gold-400)', color:'var(--gold-800)'}}>📊</div>
             <div className="habit-body">
               <p className="habit-name">Analisis Pembiasaan</p>
@@ -1539,9 +1880,30 @@ function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring,
             </div>
           </div>
         )}
+        {isAdmin && (
+          <div className="habit-card" style={{background:'var(--teal-100)', marginBottom:12}} onClick={onOpenRekapBulanan}>
+            <div className="habit-icon" style={{background:'var(--teal-700)', color:'white'}}>📅</div>
+            <div className="habit-body">
+              <p className="habit-name">Rekap Bulanan</p>
+              <p className="habit-status" style={{color:'var(--teal-700)'}}>Indeks konsistensi per bulan, per kelas</p>
+            </div>
+          </div>
+        )}
+        {isAdmin && (
+          <div className="habit-card" style={{background:'var(--sage-100)', marginBottom:18}} onClick={onOpenLaporan}>
+            <div className="habit-icon" style={{background:'var(--sage-700)', color:'white'}}>🖨️</div>
+            <div className="habit-body">
+              <p className="habit-name">Laporan</p>
+              <p className="habit-status" style={{color:'var(--sage-700)'}}>Cetak / unduh PDF laporan harian & bulanan</p>
+            </div>
+          </div>
+        )}
         <p className="section-title">Monitoring per kelas</p>
         {loading && <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Memuat daftar kelas...</p>}
-        {!loading && kelasList.length === 0 && (
+        {!loading && kelasList.length === 0 && !isAdmin && (
+          <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Belum ada kelas yang diampu tercatat atas nama Anda di sistem. Hubungi admin madrasah untuk memastikan wali_kelas_id sudah diisi.</p>
+        )}
+        {!loading && kelasList.length === 0 && isAdmin && (
           <p style={{fontSize:12.5, color:'var(--ink-faint)'}}>Belum ada data kelas ditemukan untuk madrasah ini.</p>
         )}
         {kelasList.map(k => (
@@ -1555,7 +1917,7 @@ function PegawaiDashboard({ adapter, pegawai, onToast, onBack, onOpenMonitoring,
         ))}
         {isAdmin && kelasList.length > 0 && (
           <div className="lead-note" style={{marginTop:14}}>
-            Anda masuk sebagai {pegawai.jabatan} — bisa lihat monitoring semua kelas. Guru biasa idealnya hanya melihat kelas yang diampu (pembatasan ini masih perlu ditambahkan berbasis wali_kelas_id).
+            Anda masuk sebagai {pegawai.jabatan} — bisa lihat monitoring semua kelas. Guru/wali kelas biasa cuma lihat kelas yang wali_kelas_id-nya cocok dengan mereka.
           </div>
         )}
       </div>
@@ -1711,6 +2073,14 @@ function App(){
         <div style={{width:'100%', maxWidth:980}}>
           <KepalaMadrasahDashboard adapter={adapter} pegawai={pegawai} onBack={() => setStep('pegawai-dashboard')} />
         </div>
+      ) : step === 'rekap-bulanan' ? (
+        <div style={{width:'100%', maxWidth:980}}>
+          <RekapBulananScreen adapter={adapter} pegawai={pegawai} onBack={() => setStep('pegawai-dashboard')} />
+        </div>
+      ) : step === 'laporan' ? (
+        <div style={{width:'100%', maxWidth:980}}>
+          <LaporanScreen adapter={adapter} pegawai={pegawai} onBack={() => setStep('pegawai-dashboard')} />
+        </div>
       ) : (
         <div className="phone">
           {step === 'login' && <LoginScreen onSelectRole={handleSelectRole} adapter={adapter} institution={institution} onChangeInstitution={adapter.needsInstitutionPick ? () => setStep('pick-institution') : null} />}
@@ -1718,7 +2088,7 @@ function App(){
           {step === 'jurnal' && student && <SiswaJurnal adapter={adapter} student={student} onToast={showToast} onBack={() => { setStudent(null); setStep('login'); }} />}
           {step === 'ortu' && <OrtuScreen adapter={adapter} onToast={showToast} onBack={() => setStep('login')} />}
           {step === 'pick-pegawai' && <PegawaiPicker adapter={adapter} onPick={(p) => { setPegawai(p); setStep('pegawai-dashboard'); }} onBack={() => setStep('login')} />}
-          {step === 'pegawai-dashboard' && pegawai && <PegawaiDashboard adapter={adapter} pegawai={pegawai} onToast={showToast} onBack={() => { setPegawai(null); setStep('login'); }} onOpenMonitoring={(k) => { setSelectedKelas(k); setStep('monitoring'); }} onOpenAnalisis={() => setStep('analisis')} />}
+          {step === 'pegawai-dashboard' && pegawai && <PegawaiDashboard adapter={adapter} pegawai={pegawai} onToast={showToast} onBack={() => { setPegawai(null); setStep('login'); }} onOpenMonitoring={(k) => { setSelectedKelas(k); setStep('monitoring'); }} onOpenAnalisis={() => setStep('analisis')} onOpenRekapBulanan={() => setStep('rekap-bulanan')} onOpenLaporan={() => setStep('laporan')} />}
         </div>
       )}
       <Toast message={toast} />
